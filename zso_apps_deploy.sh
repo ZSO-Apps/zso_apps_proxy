@@ -16,36 +16,63 @@ fi
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)
 
-# 2. Systempakete installieren & Docker starten
+# ==============================================================================
+# ENGINE DETECTION & INSTALLATION (Docker mit Fallback auf Podman)
+# ==============================================================================
+echo "Prüfe Container-Engine Verfügbarkeit..."
+
+USE_PODMAN=false
+
 if command -v dnf &> /dev/null; then
-    echo "RHEL-basiertes System erkannt (dnf)."
     IS_RHEL=true
     
-    # Pakete installieren
-    dnf install -y git docker docker-compose-plugin
-    
+    echo "Versuche Docker über DNF zu installieren..."
+    if dnf install -y docker docker-compose-plugin 2>/dev/null; then
+        echo "Docker erfolgreich installiert."
+    else
+        echo "Docker-Repository nicht verfügbar. Weiche auf natives Podman aus..."
+        USE_PODMAN=true
+        # podman-docker stellt das 'docker'-Kommando bereit
+        # podman-plugins wird für erweiterte Netzwerke benötigt
+        dnf install -y podman podman-docker podman-plugins iptables
+    fi
 elif command -v apt-get &> /dev/null; then
-    echo "Debian-basiertes System erkannt (apt)."
     IS_RHEL=false
-    
-    # Repository-Update und essentielle Pakete installieren
     apt-get update
     apt-get install -y git docker.io docker-compose-v2
-    
 else
-    echo "Fehler: Weder dnf noch apt-get gefunden. Nicht unterstützte Distribution!"
+    echo "Fehler: Nicht unterstützte Distribution!"
     exit 1
 fi
 
-systemctl start docker
-systemctl enable docker
+# Dienste starten & konfigurieren
+if [ "$USE_PODMAN" = true ]; then
+    echo "Konfiguriere Podman-Dienst und Docker-API-Emulation..."
+    systemctl enable --now podman.socket
+    
+    # Podman benötigt diesen Symlink, damit Compose den Socket unter /var/run findet
+    if [ ! -S "/var/run/docker.sock" ]; then
+        ln -sf /run/podman/podman.sock /var/run/docker.sock
+    fi
+else
+    echo "Konfiguriere Docker-Dienst..."
+    systemctl start docker
+    systemctl enable docker
+fi
 
+# SELinux Berechtigungen (Nur für RHEL-Systeme relevant)
 if [ "$IS_RHEL" = true ]; then
-    echo "Konfiguriere SELinux für Docker und Cgroups..."
-    sudo setsebool -P container_manage_cgroup on || true
-	sudo setsebool -P container_use_devices on || true
-    sudo semanage fcontext -a -t container_runtime_tmp_t "/run/docker.sock" 2>/dev/null || true
-    sudo restorecon -v /run/docker.sock || true
+    echo "Konfiguriere SELinux-Booleans..."
+    setsebool -P container_manage_cgroup on || true
+    
+    if [ "$USE_PODMAN" = true ]; then
+        # Podman benötigt spezifische Rechte, um den emulierten Socket freizugeben
+        setsebool -P container_run_labels on || true
+    else
+        dnf install -y policycoreutils-python-utils
+        semanage fcontext -a -t container_runtime_tmp_t "/run/docker.sock" 2>/dev/null || true
+        restorecon -v /run/docker.sock || true
+    fi
 fi
 
 # Let's Encrypt Ordner und Rechte vorbereiten
@@ -54,10 +81,7 @@ touch ./letsencrypt/acme.json
 chmod 600 ./letsencrypt/acme.json
 chown -R 65532:65532 ./letsencrypt
 
-# Gemeinsames Docker-Netzwerk anlegen
-if ! docker network inspect proxy-network >/dev/null 2>&1; then
-    docker network create proxy-network
-fi
+
 
 # ==============================================================================
 # CENTRAL TRAEFIK PROXY
@@ -68,6 +92,11 @@ if [ "$SETUP_TRAEFIK" = "true" ]; then
     echo "========================================================"
     PROXY_APP_PATH=$SCRIPT_DIR
 	
+	# Gemeinsames Docker-Netzwerk anlegen
+	if ! docker network inspect proxy-network >/dev/null 2>&1; then
+		docker network create proxy-network
+	fi
+		
 	# GID direkt vom Socket lesen (Verhindert leere Variablen durch Timing/NSS-Bugs)
     if [ -S "/run/docker.sock" ]; then
         CURRENT_DOCKER_GID=$(stat -c '%g' /run/docker.sock)
