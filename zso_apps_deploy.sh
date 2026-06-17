@@ -21,75 +21,42 @@ SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)
 # ==============================================================================
 echo "Prüfe Container-Engine Verfügbarkeit..."
 
-USE_PODMAN=false
 
 if command -v dnf &> /dev/null; then
     IS_RHEL=true
     
     echo "Versuche Docker über DNF zu installieren..."
-    if dnf install -y docker docker-compose-plugin 2>/dev/null; then
+    if dnf install -y openssl docker docker-compose-plugin 2>/dev/null; then
         echo "Docker erfolgreich installiert."
     else
-        echo "Docker-Repository nicht verfügbar. Weiche auf natives Podman aus..."
-        USE_PODMAN=true
-        # podman-docker stellt das 'docker'-Kommando bereit
-        # podman-plugins wird für erweiterte Netzwerke benötigt
-        dnf install -y podman podman-docker python3-pip
-		# podman-compose global via pip installieren
-		pip3 install --upgrade pip
-		pip3 install podman-compose
-
-		# Einen Symlink setzen, damit das System "docker-compose" und "podman-compose" im PATH findet
-		ln -sf /usr/local/bin/podman-compose /usr/bin/podman-compose
-		ln -sf /usr/local/bin/podman-compose /usr/bin/docker-compose
-		touch /etc/containers/nodocker
+        echo "Docker-Repository nicht verfügbar. Weiche auf Docker Repo aus"
+		sudo dnf -y install dnf-plugins-core
+		sudo dnf config-manager --add-repo https://download.docker.com/linux/rhel/docker-ce.repo
+		sudo dnf -y install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
     fi
 elif command -v apt-get &> /dev/null; then
     IS_RHEL=false
     apt-get update
-    apt-get install -y git docker.io docker-compose-v2
+    apt-get install -y git docker.io docker-compose-v2 openssl
 else
     echo "Fehler: Nicht unterstützte Distribution!"
     exit 1
 fi
 
 # Dienste starten & konfigurieren
-if [ "$USE_PODMAN" = true ]; then
-    echo "Konfiguriere Podman-Dienst und Docker-API-Emulation..."
-    systemctl enable --now podman.socket
-    
-	mkdir -p /etc/containers
-    cat <<EOF > /etc/containers/registries.conf
-# Global generische Registry-Konfiguration für automatische Deployments
-unqualified-search-registries = ['docker.io']
 
-# Verhindert, dass Podman bei nicht auffindbaren Images interaktiv nachfragt
-short-name-mode = "enforcing"
-EOF
-	
-    # Podman benötigt diesen Symlink, damit Compose den Socket unter /var/run findet
-    if [ ! -S "/var/run/docker.sock" ]; then
-        ln -sf /run/podman/podman.sock /var/run/docker.sock
-    fi
-else
-    echo "Konfiguriere Docker-Dienst..."
-    systemctl start docker
-    systemctl enable docker
-fi
+echo "Konfiguriere Docker-Dienst..."
+systemctl start docker
+systemctl enable docker
 
 # SELinux Berechtigungen (Nur für RHEL-Systeme relevant)
 if [ "$IS_RHEL" = true ]; then
     echo "Konfiguriere SELinux-Booleans..."
     setsebool -P container_manage_cgroup on || true
     
-    if [ "$USE_PODMAN" = true ]; then
-        # Podman benötigt spezifische Rechte, um den emulierten Socket freizugeben
-        setsebool -P container_run_labels on || true
-    else
-        dnf install -y policycoreutils-python-utils
-        semanage fcontext -a -t container_runtime_tmp_t "/run/docker.sock" 2>/dev/null || true
-        restorecon -v /run/docker.sock || true
-    fi
+	dnf install -y policycoreutils-python-utils
+	semanage fcontext -a -t container_runtime_tmp_t "/run/docker.sock" 2>/dev/null || true
+	restorecon -v /run/docker.sock || true
 fi
 
 # Let's Encrypt Ordner und Rechte vorbereiten
@@ -185,7 +152,7 @@ if [ "$SETUP_INCIDENT_MANAGER" = "true" ]; then
     echo "========================================================"
     echo "Richte Incident Manager ein..."
     echo "========================================================"
-
+	
     if [ ! -d "$IM_APP_PATH" ]; then
         git clone $IM_GIT $IM_APP_PATH
     fi
@@ -213,14 +180,22 @@ if [ "$SETUP_INCIDENT_MANAGER" = "true" ]; then
         fi
     fi
 
-    if ! grep -q "^RFO_JWT_SECRET=" .env || [ -z "$(grep "^RFO_JWT_SECRET=" .env | cut -d'=' -f2)" ]; then
+# 1. Zeile auslesen, Kommentare abschneiden und Leerzeichen entfernen
+    CURRENT_JWT_VAL=$(grep "^RFO_JWT_SECRET=" .env | cut -d'=' -f2- | sed 's/#.*//' | xargs)
+
+    # 2. Wenn der Key fehlt ODER der bereinigte Wert leer ist
+    if ! grep -q "^RFO_JWT_SECRET=" .env || [ -z "$CURRENT_JWT_VAL" ]; then
         JWT_SECRET=$(openssl rand -hex 32)
+        
         if grep -q "^RFO_JWT_SECRET=" .env; then
+            # Existierende Zeile (auch wenn sie Kommentare enthielt) komplett ersetzen
             sed -i "s|^RFO_JWT_SECRET=.*|RFO_JWT_SECRET=${JWT_SECRET}|" .env
         else
             echo "RFO_JWT_SECRET=${JWT_SECRET}" >> .env
         fi
         echo "JWT Secret wurde generiert."
+    else
+        echo "JWT Secret existiert bereits und wird beibehalten."
     fi
 
     echo "Installiere Frontend-Abhängigkeiten über Docker..."
