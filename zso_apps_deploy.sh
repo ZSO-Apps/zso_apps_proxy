@@ -34,7 +34,15 @@ if command -v dnf &> /dev/null; then
         USE_PODMAN=true
         # podman-docker stellt das 'docker'-Kommando bereit
         # podman-plugins wird für erweiterte Netzwerke benötigt
-        dnf install -y podman podman-docker podman-plugins iptables
+        dnf install -y podman podman-docker python3-pip
+		# podman-compose global via pip installieren
+		pip3 install --upgrade pip
+		pip3 install podman-compose
+
+		# Einen Symlink setzen, damit das System "docker-compose" und "podman-compose" im PATH findet
+		ln -sf /usr/local/bin/podman-compose /usr/bin/podman-compose
+		ln -sf /usr/local/bin/podman-compose /usr/bin/docker-compose
+		touch /etc/containers/nodocker
     fi
 elif command -v apt-get &> /dev/null; then
     IS_RHEL=false
@@ -50,6 +58,15 @@ if [ "$USE_PODMAN" = true ]; then
     echo "Konfiguriere Podman-Dienst und Docker-API-Emulation..."
     systemctl enable --now podman.socket
     
+	mkdir -p /etc/containers
+    cat <<EOF > /etc/containers/registries.conf
+# Global generische Registry-Konfiguration für automatische Deployments
+unqualified-search-registries = ['docker.io']
+
+# Verhindert, dass Podman bei nicht auffindbaren Images interaktiv nachfragt
+short-name-mode = "enforcing"
+EOF
+	
     # Podman benötigt diesen Symlink, damit Compose den Socket unter /var/run findet
     if [ ! -S "/var/run/docker.sock" ]; then
         ln -sf /run/podman/podman.sock /var/run/docker.sock
