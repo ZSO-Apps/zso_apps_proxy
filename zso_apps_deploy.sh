@@ -26,13 +26,13 @@ if command -v dnf &> /dev/null; then
     IS_RHEL=true
     
     echo "Versuche Docker über DNF zu installieren..."
-    if dnf install -y openssl docker docker-compose-plugin 2>/dev/null; then
+    if dnf install -y docker docker-compose-plugin openssl 2>/dev/null; then
         echo "Docker erfolgreich installiert."
     else
         echo "Docker-Repository nicht verfügbar. Weiche auf Docker Repo aus"
 		sudo dnf -y install dnf-plugins-core
 		sudo dnf config-manager --add-repo https://download.docker.com/linux/rhel/docker-ce.repo
-		sudo dnf -y install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+		sudo dnf -y install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin openssl
     fi
 elif command -v apt-get &> /dev/null; then
     IS_RHEL=false
@@ -165,11 +165,24 @@ if [ "$SETUP_INCIDENT_MANAGER" = "true" ]; then
         cp .env.dist .env
     fi
 
+# Sicherstellen, dass .env mit einer echten neuen Zeile endet (behebt das Aneinanderkleben)
+    sed -i -e '$a\' .env
+
+    # 1. APP_DOMAIN setzen / ersetzen
     if grep -q "^APP_DOMAIN=" .env; then
         sed -i "s|^APP_DOMAIN=.*|APP_DOMAIN=${IM_DOMAIN}|" .env
     else
         echo "APP_DOMAIN=${IM_DOMAIN}" >> .env
     fi
+
+    # 2. RFO_JWT_SECRET generieren und IMMER sauber setzen
+    JWT_SECRET=$(openssl rand -hex 32)
+    if grep -q "^RFO_JWT_SECRET=" .env; then
+        sed -i "s|^RFO_JWT_SECRET=.*|RFO_JWT_SECRET=${JWT_SECRET}|" .env
+    else
+        echo "RFO_JWT_SECRET=${JWT_SECRET}" >> .env
+    fi
+    echo "JWT Secret wurde neu gesetzt."
 	
 	if [ "$OVERWRITE_DOCKER_COMPOSE" = "true" ]; then
         if [ -f "$SCRIPT_DIR/docker-compose-im.yml" ]; then
@@ -178,24 +191,6 @@ if [ "$SETUP_INCIDENT_MANAGER" = "true" ]; then
         else
             echo "Warnung: '$SCRIPT_DIR/docker-compose-im.yml' nicht gefunden! Standard-Datei wird verwendet."
         fi
-    fi
-
-# 1. Zeile auslesen, Kommentare abschneiden und Leerzeichen entfernen
-    CURRENT_JWT_VAL=$(grep "^RFO_JWT_SECRET=" .env | cut -d'=' -f2- | sed 's/#.*//' | xargs)
-
-    # 2. Wenn der Key fehlt ODER der bereinigte Wert leer ist
-    if ! grep -q "^RFO_JWT_SECRET=" .env || [ -z "$CURRENT_JWT_VAL" ]; then
-        JWT_SECRET=$(openssl rand -hex 32)
-        
-        if grep -q "^RFO_JWT_SECRET=" .env; then
-            # Existierende Zeile (auch wenn sie Kommentare enthielt) komplett ersetzen
-            sed -i "s|^RFO_JWT_SECRET=.*|RFO_JWT_SECRET=${JWT_SECRET}|" .env
-        else
-            echo "RFO_JWT_SECRET=${JWT_SECRET}" >> .env
-        fi
-        echo "JWT Secret wurde generiert."
-    else
-        echo "JWT Secret existiert bereits und wird beibehalten."
     fi
 
     echo "Installiere Frontend-Abhängigkeiten über Docker..."
