@@ -79,29 +79,8 @@ if [ "$SETUP_TRAEFIK" = "true" ]; then
 	# Gemeinsames Docker-Netzwerk anlegen
 	if ! docker network inspect proxy-network >/dev/null 2>&1; then
 		docker network create proxy-network
-	fi
-		
-	# GID direkt vom Socket lesen (Verhindert leere Variablen durch Timing/NSS-Bugs)
-    if [ -S "/run/docker.sock" ]; then
-        CURRENT_DOCKER_GID=$(stat -c '%g' /run/docker.sock)
-    elif [ -S "/var/run/docker.sock" ]; then
-        CURRENT_DOCKER_GID=$(stat -c '%g' /var/run/docker.sock)
-    else
-        CURRENT_DOCKER_GID=$(getent group docker | cut -d: -f3 || echo "993")
-    fi
-    
-    echo "Nutze Docker Gruppen-ID (GID): $CURRENT_DOCKER_GID"
-    
-    # Direkt für Docker Compose exportieren (Arbeitsspeicher)
-    export DOCKER_GID=$CURRENT_DOCKER_GID
-    
-    # In die lokale .env schreiben/aktualisieren
-    if grep -q "^DOCKER_GID=" .env; then
-        sed -i "s|^DOCKER_GID=.*|DOCKER_GID=${CURRENT_DOCKER_GID}|" .env
-    else
-        echo "DOCKER_GID=${CURRENT_DOCKER_GID}" >> .env
-    fi
-	
+	fi   
+   
     docker compose up -d
     cd - > /dev/null
 else
@@ -224,6 +203,113 @@ if [ "$SETUP_INCIDENT_MANAGER" = "true" ]; then
 else
     echo "Incident Manager Setup ist deaktiviert. Überspringe..."
 fi
+
+
+
+
+# ==============================================================================
+# WEB APP 3: ZS Karte / offlinekarte
+# ==============================================================================
+if [ "$SETUP_ZSK" = "true" ]; then
+	echo "Konfiguriere ZS Karte / offlinekarte"
+	
+	cd $OFK_PATH
+	git clone git@github.com:zso-freiamt-it/offlinekarte.git -b zskarte/dev $OFK_PATH
+	git submodule update --init --recursive #load also submodules
+	
+	if grep -q "^OFK_TILE_DOMAIN=" .env; then
+        sed -i "s|^OFK_TILE_DOMAIN=.*|OFK_TILE_DOMAIN=${OFK_TILE_DOMAIN}|" .env
+    else
+        echo "OFK_TILE_DOMAIN=${OFK_TILE_DOMAIN}" >> .env
+    fi
+
+	if grep -q "^OFK_SEARCH_DOMAIN=" .env; then
+        sed -i "s|^OFK_SEARCH_DOMAIN=.*|OFK_SEARCH_DOMAIN=${OFK_SEARCH_DOMAIN}|" .env
+    else
+        echo "OFK_SEARCH_DOMAIN=${OFK_SEARCH_DOMAIN}" >> .env
+    fi		
+	
+	if grep -q "^TILESERVER_GL_ALLOWED_HOSTS=" .env; then
+        sed -i "s|^TILESERVER_GL_ALLOWED_HOSTS=.*|TILESERVER_GL_ALLOWED_HOSTS=${OFK_TILE_DOMAIN}|" tileserver.env
+    else
+        echo "TILESERVER_GL_ALLOWED_HOSTS=${OFK_TILE_DOMAIN}" >> tileserver.env
+    fi
+	
+	if [ "$OVERWRITE_DOCKER_COMPOSE" = "true" ]; then
+        if [ -f "$SCRIPT_DIR/docker-compose-offlinekarte.yml" ]; then
+            echo "Überschreibe docker-compose.yml in ZS-Karte mit docker-compose-offlinekarte.yml..."
+            cp "$SCRIPT_DIR/docker-compose-offlinekarte.yml" "$OFK_PATH/docker-compose.yml"
+        else
+            echo "Warnung: '$SCRIPT_DIR/docker-compose-offlinekarte.yml' nicht gefunden! Standard-Datei wird verwendet."
+        fi
+    fi
+	
+	# Starte offlinekarte (tileserver und searchserver)
+	bash $OFK_PATH/zskarte.sh init
+	bash $OFK_PATH/zskarte.sh start
+	
+	echo "init ZSKARTE"
+	#### ZSKARTE
+	
+	if [ "$OVERWRITE_DOCKER_COMPOSE" = "true" ]; then
+        if [ -f "$SCRIPT_DIR/docker-compose-zskarte.yml" ]; then
+            echo "Überschreibe docker-compose.yml in ZS-Karte mit docker-compose-zskarte.yml..."
+            cp "$SCRIPT_DIR/docker-compose-zskarte.yml" "$ZSK_PATH/docker-compose.yml"
+        else
+            echo "Warnung: '$SCRIPT_DIR/docker-compose-zskarte.yml' nicht gefunden! Standard-Datei wird verwendet."
+        fi
+    fi
+	
+	#/opt/zso/offlinekarte/zskarte/packages/server/.env
+	
+	# Create the data/postgresql folder
+	cd $ZSK_PATH
+	
+	grep ZSK $SCRIPT_DIR/.env > $ZSK_PATH/.env
+	
+	cp $ZSK_PATH/packages/server/.env.example $ZSK_PATH/packages/server/.env
+	
+	mkdir -p $ZSK_PATH/data/postgresql
+	# Add the UID 1001 (non-root user of postgresql) as the folder owner
+	sudo chown -R 1001:1001 $ZSK_PATH/data/postgresql
+	# Create the data/pgadmin folder
+	mkdir -p $ZSK_PATH/data/pgadmin
+	# Add the UID 5050 (non-root user of pgadmin) as the folder owner
+	sudo chown -R 5050:5050 $ZSK_PATH/data/pgadmin
+	
+	#../zskarte/packages/app/src/environments/environment.prod.ts
+	if [ -f "$ZSK_ENV_TS" ]; then
+		echo "Passe TypeScript Environments an..."
+		
+		# Protokoll dynamisch anhand der TLS-Variable bestimmen
+		if [ "$ZSK_ENABLE_TLS" = "true" ]; then
+			PROTO="https"
+			echo "TLS ist aktiviert -> Nutze https://"
+		else
+			PROTO="http"
+			echo "TLS ist deaktiviert -> Nutze http://"
+		fi
+
+		sed -i "s|apiUrl:.*|apiUrl: '${PROTO}://${ZSK_API_DOMAIN}${ZSK_API_PATH}',|" "$ZSK_ENV_TS"
+		sed -i "s|tileUrl:.*|tileUrl: '${PROTO}://${OFK_TILE_DOMAIN}${OFK_TILE_PATH}',|" "$ZSK_ENV_TS"
+		sed -i "s|searchUrl:.*|searchUrl: '${PROTO}://${OFK_SEARCH_DOMAIN}${OFK_SEARCH_PATH}',|" "$ZSK_ENV_TS"
+		sed -i "s|searchLabel:.*|searchLabel: '${ZSK_SEARCH_LABEL}',|" "$ZSK_ENV_TS"
+		
+		echo "TypeScript Environments erfolgreich aktualisiert."
+		echo "----------------------------------------"
+		grep -E "apiUrl|tileUrl|searchUrl|searchLabel" "$ZSK_ENV_TS"
+		echo "----------------------------------------"
+	else
+		echo "Warnung: $ZSK_ENV_TS nicht gefunden. Überspringe Anpassung."
+	fi
+	
+	docker compose up -d --force-recreate
+
+else
+    echo "Zivilschutz Karte / Offlinekarte Setup ist deaktiviert. Überspringe..."
+fi
+
+
 
 echo "========================================================"
 echo " Gesamtes Setup abgeschlossen!"
