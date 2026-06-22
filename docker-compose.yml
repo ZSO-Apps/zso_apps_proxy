@@ -30,13 +30,13 @@ services:
       - "--certificatesresolvers.myresolver.acme.httpchallenge=true"
       - "--certificatesresolvers.myresolver.acme.httpchallenge.entrypoint=web"
       - "--certificatesresolvers.myresolver.acme.email=${ACME_MAIL_CONTACT}"
-      - "--certificatesresolvers.myresolver.acme.storage=/letsencrypt/acme.json"
+      - "--certificatesresolvers.myresolver.acme.storage=/certs/acme.json"
     ports:
       # Port-Mappings auf dem Synology-Host matchen die internen Variablen
       - "${PROXY_HTTP_PORT}:${PROXY_HTTP_PORT}"
       - "${PROXY_HTTPS_PORT}:${PROXY_HTTPS_PORT}"
     volumes:
-      - ./letsencrypt:/letsencrypt
+      - ./certs:/certs
     networks:
       - proxy-network
     depends_on:

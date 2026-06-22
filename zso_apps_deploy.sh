@@ -70,10 +70,10 @@ if [ "$IS_RHEL" = true ]; then
 fi
 
 # Let's Encrypt Ordner und Rechte vorbereiten
-mkdir -p ./letsencrypt
-touch ./letsencrypt/acme.json
-chmod 600 ./letsencrypt/acme.json
-chown -R 65532:65532 ./letsencrypt
+mkdir -p ./certs
+touch ./certs/acme.json
+chmod 600 ./certs/acme.json
+chown -R 65532:65532 ./certs
 
 
 
