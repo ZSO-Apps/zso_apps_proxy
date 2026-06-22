@@ -48,12 +48,14 @@ services:
       - "traefik.enable=true"
       - "traefik.docker.network=proxy-network"
       
-      # HTTP Router (API)
+      # HTTP Router (API) + Redirect
       - "traefik.http.routers.zsk-api-http.entrypoints=web"
       - "traefik.http.routers.zsk-api-http.rule=Host(`${ZSK_API_DOMAIN}`)"
       - "traefik.http.routers.zsk-api-http.service=zsk-api-service"
+      - "traefik.http.routers.zsk-api-http.middlewares=zsk-api-redirect"
+      - "traefik.http.middlewares.zsk-api-redirect.redirectscheme.scheme=https"
       
-      # HTTPS Router (API) - Fest auf TLS gesetzt
+      # HTTPS Router (API)
       - "traefik.http.routers.zsk-api-secure.entrypoints=websecure"
       - "traefik.http.routers.zsk-api-secure.rule=Host(`${ZSK_API_DOMAIN}`)"
       - "traefik.http.routers.zsk-api-secure.tls=true"
@@ -79,20 +81,27 @@ services:
       - "traefik.enable=true"
       - "traefik.docker.network=proxy-network"
       
-      # HTTP Router (Frontend App)
+      # HTTP Router (Frontend App) + Redirect
       - "traefik.http.routers.zsk-app-http.entrypoints=web"
       - "traefik.http.routers.zsk-app-http.rule=Host(`${ZSK_DOMAIN}`)"
       - "traefik.http.routers.zsk-app-http.service=zsk-app-service"
+      - "traefik.http.routers.zsk-app-http.middlewares=zsk-app-redirect"
+      - "traefik.http.middlewares.zsk-app-redirect.redirectscheme.scheme=https"
       
-      # HTTPS Router (Frontend App) - Fest auf TLS gesetzt
+      # HTTPS Router (Frontend App)
       - "traefik.http.routers.zsk-app-secure.entrypoints=websecure"
       - "traefik.http.routers.zsk-app-secure.rule=Host(`${ZSK_DOMAIN}`)"
+      - "traefik.http.routers.zsk-app-secure.service=zsk-app-service"
       - "traefik.http.routers.zsk-app-secure.tls=true"
       - "traefik.http.routers.zsk-app-secure.tls.certresolver=myresolver"
-      - "traefik.http.routers.zsk-app-service=zsk-app-service"
       
       # Interner Port im nginx/apache des Frontend-Containers
       - "traefik.http.services.zsk-app-service.loadbalancer.server.port=80"
+
+volumes:
+  frontend.node_modules:
+  backend.cache:
+  database:
 
 networks:
   zskarte:

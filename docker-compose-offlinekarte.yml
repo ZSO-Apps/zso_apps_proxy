@@ -23,10 +23,12 @@ services:
       - "traefik.enable=true"
       - "traefik.docker.network=proxy-network"
       
-      # HTTP Router für die Suche (Pfad /search)
+      # HTTP Router für die Suche (Pfad /search) + Redirect
       - "traefik.http.routers.offline-search-http.entrypoints=web"
       - "traefik.http.routers.offline-search-http.rule=Host(`${OFK_SEARCH_DOMAIN}`)"
       - "traefik.http.routers.offline-search-http.service=offline-search-service"
+      - "traefik.http.routers.offline-search-http.middlewares=offline-search-redirect"
+      - "traefik.http.middlewares.offline-search-redirect.redirectscheme.scheme=https"
       
       # HTTPS Router für die Suche
       - "traefik.http.routers.offline-search-secure.entrypoints=websecure"
@@ -47,7 +49,7 @@ services:
       - ./mapserv/data:/data
     env_file:
       - tileserver.env
-      - .env # Für die OFK_DOMAIN Variable
+      - .env
     networks:
       - proxy-network
       - default
@@ -55,10 +57,12 @@ services:
       - "traefik.enable=true"
       - "traefik.docker.network=proxy-network"
       
-      # HTTP Router für den Tileserver (Standard-Pfad /)
+      # HTTP Router für den Tileserver (Standard-Pfad /) + Redirect
       - "traefik.http.routers.offline-tiles-http.entrypoints=web"
       - "traefik.http.routers.offline-tiles-http.rule=Host(`${OFK_TILE_DOMAIN}`)"
       - "traefik.http.routers.offline-tiles-http.service=offline-tiles-service"
+      - "traefik.http.routers.offline-tiles-http.middlewares=offline-tiles-redirect"
+      - "traefik.http.middlewares.offline-tiles-redirect.redirectscheme.scheme=https"
       
       # HTTPS Router für den Tileserver
       - "traefik.http.routers.offline-tiles-secure.entrypoints=websecure"

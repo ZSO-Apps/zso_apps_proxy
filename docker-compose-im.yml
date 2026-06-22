@@ -1,5 +1,4 @@
-services:
-  frontend:
+frontend:
     image: node:16-alpine3.15
     command: ['npm', 'run', 'dev']
     working_dir: /app
@@ -23,79 +22,22 @@ services:
       - default
     labels:
       - "traefik.enable=true"
-      
-      # HTTP Router (Port 80)
+      # Bestimmt das Netzwerk für Traefik (Nur einmal nötig)
       - "traefik.docker.network=proxy-network"
+      
+      # HTTP Router mit automatischem Redirect auf HTTPS
       - "traefik.http.routers.im-frontend-http.entrypoints=web"
       - "traefik.http.routers.im-frontend-http.rule=Host(`${APP_DOMAIN}`)"
       - "traefik.http.routers.im-frontend-http.service=im-frontend-service"
+      - "traefik.http.routers.im-frontend-http.middlewares=im-frontend-redirect"
+      - "traefik.http.middlewares.im-frontend-redirect.redirectscheme.scheme=https"
       
-      # HTTPS Router (Port 443)
-      - "traefik.docker.network=proxy-network"
+      # HTTPS Router (KORRIGIERT: .service-Zuweisung gefixt)
       - "traefik.http.routers.im-frontend-secure.entrypoints=websecure"
       - "traefik.http.routers.im-frontend-secure.rule=Host(`${APP_DOMAIN}`)"
+      - "traefik.http.routers.im-frontend-secure.service=im-frontend-service"
       - "traefik.http.routers.im-frontend-secure.tls=true"
       - "traefik.http.routers.im-frontend-secure.tls.certresolver=myresolver"
-      - "traefik.http.routers.im-frontend-service=im-frontend-service"
       
       # Interner Next.js Port im Container
       - "traefik.http.services.im-frontend-service.loadbalancer.server.port=3000"
-
-  backend:
-    image: gradle:7.6-jdk17
-    command: ['sh', 'dev.sh']
-    working_dir: /app
-    restart: always
-    networks:
-      default:
-        aliases:
-          - backend-${RFO_STAGE}
-    environment:
-      - SPRING_JPA_SHOW_SQL=true
-    ports:
-      - '3001:8080'
-      - '5005:5005'
-    volumes:
-      - ./backend:/app
-      - backend.cache:/home/gradle/.gradle
-      - ./files:/app/files
-    depends_on:
-      - database
-    env_file:
-      - .env
-    healthcheck:
-      test: [ "CMD-SHELL", "wget -q --spider http://localhost:8080/actuator/health || exit 1" ]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 60s
-
-  database:
-    image: mysql:8.0
-    command:
-      - '--default-authentication-plugin=mysql_native_password'
-    restart: always
-    environment:
-      - MYSQL_DATABASE=${RFO_DATABASE_NAME}
-      - MYSQL_USER=${RFO_DATABASE_USERNAME}
-      - MYSQL_PASSWORD=${RFO_DATABASE_PASSWORD}
-      - MYSQL_ROOT_PASSWORD=${RFO_DATABASE_ROOT_PASSWORD}
-    ports:
-      - '3002:3306'
-    volumes:
-      - database:/var/lib/mysql
-      - ./data-sample.sql:/data-sample.sql
-      - ./data-minimal.sql:/data-minimal.sql
-    env_file:
-      - .env
-    networks:
-      - default
-
-volumes:
-  frontend.node_modules:
-  backend.cache:
-  database:
-
-networks:
-  proxy-network:
-    external: true
