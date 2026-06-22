@@ -4,11 +4,12 @@ services:
     image: tecnativa/docker-socket-proxy:latest
     container_name: zso_socket_proxy
     restart: unless-stopped
-    privileged: true  # Erlaubt das Lesen unter SELinux
+    privileged: true
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     environment:
-      - CONTAINERS=1  # Traefik darf Container-Infos lesen
+      - CONTAINERS=1
+      - NETWORKS=1
     networks:
       - proxy-network
 
@@ -16,27 +17,25 @@ services:
     image: traefik:latest
     container_name: zso_apps_proxy
     restart: unless-stopped
-    # user und group_add werden nicht mehr benötigt!
     command:
       - "--providers.docker=true"
       - "--providers.docker.exposedbydefault=false"
-      # WICHTIG: Traefik schaut nun auf den Proxy statt auf die Datei!
       - "--providers.docker.endpoint=tcp://socket-proxy:2375"
       
-      # Entrypoints
-      - "--entrypoints.web.address=:80"
-      - "--entrypoints.websecure.address=:443"
+      # Entrypoints variabel über Umgebungsvariablen gesteuert
+      - "--entrypoints.web.address=:${PROXY_HTTP_PORT}"
+      - "--entrypoints.websecure.address=:${PROXY_HTTPS_PORT}"
       
-      # Let's Encrypt
+      # Let's Encrypt Konfiguration mit dynamischer Mail
       - "--certificatesresolvers.myresolver.acme.httpchallenge=true"
       - "--certificatesresolvers.myresolver.acme.httpchallenge.entrypoint=web"
-      - "--certificatesresolvers.myresolver.acme.email=deine-email@deine-domain.de"
+      - "--certificatesresolvers.myresolver.acme.email=${ACME_MAIL_CONTACT}"
       - "--certificatesresolvers.myresolver.acme.storage=/letsencrypt/acme.json"
     ports:
-      - "80:80"
-      - "443:443"
+      # Port-Mappings auf dem Synology-Host matchen die internen Variablen
+      - "${PROXY_HTTP_PORT}:${PROXY_HTTP_PORT}"
+      - "${PROXY_HTTPS_PORT}:${PROXY_HTTPS_PORT}"
     volumes:
-      # Die Socket-Zeile ist hier komplett weg!
       - ./letsencrypt:/letsencrypt
     networks:
       - proxy-network

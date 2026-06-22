@@ -21,10 +21,9 @@ SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)
 # ==============================================================================
 echo "Prüfe Container-Engine Verfügbarkeit..."
 
-
 if command -v dnf &> /dev/null; then
     IS_RHEL=true
-    
+    echo "RHEL based system erkannt!"
     echo "Versuche Docker über DNF zu installieren..."
     if dnf install -y docker docker-compose-plugin openssl 2>/dev/null; then
         echo "Docker erfolgreich installiert."
@@ -36,14 +35,25 @@ if command -v dnf &> /dev/null; then
     fi
 elif command -v apt-get &> /dev/null; then
     IS_RHEL=false
+	echo "Debian based system erkannt!"
     apt-get update
     apt-get install -y git docker.io docker-compose-v2 openssl
+elif [ -f /etc/synoinfo.conf ]; then
+    IS_RHEL=false
+    echo "Synology NAS erkannt. Überprüfe installierte Pakete..."
+    
+    # Git und OpenSSL können via SynoCommunity (opkg) oder oft direkt genutzt werden.
+    # Docker/Docker-Compose sollte über das DSM Paketzentrum installiert sein.
+    if ! command -v docker &> /dev/null || ! docker compose version &> /dev/null; then
+        echo "Fehler: Docker oder Docker Compose ist nicht auf der Synology installiert!"
+        echo "Bitte installiere das 'Container Manager' (DSM 7.2+) oder 'Docker' Paket über das DSM Paketzentrum."
+        exit 1
+    fi
+    echo "Docker und Docker Compose sind auf der Synology bereit."
 else
     echo "Fehler: Nicht unterstützte Distribution!"
     exit 1
 fi
-
-# Dienste starten & konfigurieren
 
 echo "Konfiguriere Docker-Dienst..."
 systemctl start docker
