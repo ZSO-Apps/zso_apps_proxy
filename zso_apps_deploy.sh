@@ -45,11 +45,12 @@ elif [ -f /etc/synoinfo.conf ]; then
     # Git und OpenSSL können via SynoCommunity (opkg) oder oft direkt genutzt werden.
     # Docker/Docker-Compose sollte über das DSM Paketzentrum installiert sein.
     if ! command -v docker &> /dev/null || ! docker compose version &> /dev/null; then
-        echo "Fehler: Docker oder Docker Compose ist nicht auf der Synology installiert!"
+        echo "Fehler: Docker oder docker compose ist nicht auf der Synology installiert!"
         echo "Bitte installiere das 'Container Manager' (DSM 7.2+) oder 'Docker' Paket über das DSM Paketzentrum."
         exit 1
     fi
-    echo "Docker und Docker Compose sind auf der Synology bereit."
+	#fallback für synology NAS ohne seccomp
+    echo "Docker und docker compose sind auf der Synology bereit."
 else
     echo "Fehler: Nicht unterstützte Distribution!"
     exit 1
@@ -91,7 +92,7 @@ if [ "$SETUP_TRAEFIK" = "true" ]; then
 		docker network create proxy-network
 	fi   
    
-    docker compose up -d
+    docker compose --env-file .env --ansi never up -d --quiet-pull
     cd - > /dev/null
 else
     echo "Traefik Proxy Setup ist deaktiviert. Überspringe..."
@@ -127,7 +128,7 @@ if [ "$SETUP_PWA" = "true" ]; then
     docker compose build
     docker compose run --rm pwa-app npm run seed-users
 
-    docker compose up -d
+    docker compose --env-file .env --ansi never up -d --quiet-pull
     cd - > /dev/null
 else
     echo "PWA App Setup ist deaktiviert. Überspringe..."
@@ -186,7 +187,7 @@ if [ "$SETUP_INCIDENT_MANAGER" = "true" ]; then
     docker compose run --rm --no-deps frontend sh -c "npm install"
 
     echo "Starte IM Backend (pre-import)"
-    docker compose up -d backend
+    docker compose --env-file .env --ansi never up backend -d --quiet-pull
 
     echo "Warte 10 Sekunden, bis die Datenbank hochgefahren ist..."
     sleep 10
@@ -194,11 +195,11 @@ if [ "$SETUP_INCIDENT_MANAGER" = "true" ]; then
     case "$IM_DB_DATA_CHOICE" in
         minimal)
             echo "Lade minimale Daten (Admin & Agent)..."
-            docker compose exec -T database sh -c 'mysql -uroot -p"${MYSQL_ROOT_PASSWORD}" "${MYSQL_DATABASE}" < /data-minimal.sql'
+           docker compose exec -T database sh -c 'mysql -uroot -p"${MYSQL_ROOT_PASSWORD}" "${MYSQL_DATABASE}" < /data-minimal.sql'
             ;;
         sample)
             echo "Lade vollständige Sample-Daten..."
-            docker compose exec -T database sh -c 'mysql -uroot -p"${MYSQL_ROOT_PASSWORD}" "${MYSQL_DATABASE}" < /data-sample.sql'
+           docker compose exec -T database sh -c 'mysql -uroot -p"${MYSQL_ROOT_PASSWORD}" "${MYSQL_DATABASE}" < /data-sample.sql'
             ;;
         *)
             echo "Überspringe das Laden von Demodaten."
@@ -206,8 +207,8 @@ if [ "$SETUP_INCIDENT_MANAGER" = "true" ]; then
     esac
 
     echo "Starte Incident Manager Container..."
-    docker compose up -d
-
+    docker compose --env-file .env --ansi never up -d --quiet-pull
+	
     echo "Setup für Incident Manager erfolgreich abgeschlossen!"
     cd - > /dev/null
 else

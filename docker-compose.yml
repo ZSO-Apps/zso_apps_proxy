@@ -1,5 +1,4 @@
 services:
-  # Der Sicherheits-Proxy, der den Socket für SELinux lesbar macht
   socket-proxy:
     image: tecnativa/docker-socket-proxy:latest
     container_name: zso_socket_proxy
@@ -10,29 +9,29 @@ services:
     environment:
       - CONTAINERS=1
       - NETWORKS=1
+      - SERVICES=1
     networks:
-      - proxy-network
+      proxy-network:
+        aliases:
+          - socket-proxy
 
   traefik:
-    image: traefik:latest
+    image: traefik:v3.0
     container_name: zso_apps_proxy
     restart: unless-stopped
     command:
+      - "--log.level=${TRAEFIK_LOG_LEVEL}"
       - "--providers.docker=true"
       - "--providers.docker.exposedbydefault=false"
       - "--providers.docker.endpoint=tcp://socket-proxy:2375"
-      
-      # Entrypoints variabel über Umgebungsvariablen gesteuert
       - "--entrypoints.web.address=:${PROXY_HTTP_PORT}"
       - "--entrypoints.websecure.address=:${PROXY_HTTPS_PORT}"
-      
-      # Let's Encrypt Konfiguration mit dynamischer Mail
+      - "--entrypoints.websecure.http.tls.certresolver=myresolver"
       - "--certificatesresolvers.myresolver.acme.httpchallenge=true"
       - "--certificatesresolvers.myresolver.acme.httpchallenge.entrypoint=web"
-      - "--certificatesresolvers.myresolver.acme.email=${ACME_MAIL_CONTACT}"
+      - "--certificatesresolvers.myresolver.acme.email=${ACME_EMAIL}"
       - "--certificatesresolvers.myresolver.acme.storage=/certs/acme.json"
     ports:
-      # Port-Mappings auf dem Synology-Host matchen die internen Variablen
       - "${PROXY_HTTP_PORT}:${PROXY_HTTP_PORT}"
       - "${PROXY_HTTPS_PORT}:${PROXY_HTTPS_PORT}"
     volumes:
