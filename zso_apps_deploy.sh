@@ -173,29 +173,36 @@ if [ "$SETUP_INCIDENT_MANAGER" = "true" ]; then
     cd $IM_APP_PATH
 	chmod +x $IM_APP_PATH/backend/gradlew
 
-    if [ ! -f .env ]; then
-        echo "Erstelle .env aus .env.dist..."
-        cp .env.dist .env
-    fi
+	# 1. .env kopieren, falls nicht vorhanden
+	if [ ! -f .env ]; then
+		echo "Erstelle .env aus .env.dist..."
+		cp .env.dist .env
+	fi
 
-# Sicherstellen, dass .env mit einer echten neuen Zeile endet (behebt das Aneinanderkleben)
-    sed -i -e '$a\' .env
+	# Sicherstellen, dass .env mit einer echten neuen Zeile endet (POSIX-konform & portabel)
+	[ -n "$(tail -c1 .env)" ] && echo "" >> .env
 
-    # 1. APP_DOMAIN setzen / ersetzen
-    if grep -q "^APP_DOMAIN=" .env; then
-        sed -i "s|^APP_DOMAIN=.*|APP_DOMAIN=${IM_DOMAIN}|" .env
-    else
-        echo "APP_DOMAIN=${IM_DOMAIN}" >> .env
-    fi
+	# 2. APP_DOMAIN setzen / ersetzen
+	if grep -q "^APP_DOMAIN[[:space:]]*=" .env; then
+		# Nutzt , statt | als Trenner, falls in der Domain ein | vorkommen sollte
+		sed -i.bak "s,^APP_DOMAIN[[:space:]]*=.*,APP_DOMAIN=${IM_DOMAIN}," .env && rm .env.bak
+	else
+		echo "APP_DOMAIN=${IM_DOMAIN}" >> .env
+	fi
 
-    # 2. RFO_JWT_SECRET generieren und IMMER sauber setzen
-    JWT_SECRET=$(openssl rand -hex 32)
-    if grep -q "^RFO_JWT_SECRET=" .env; then
-        sed -i "s|^RFO_JWT_SECRET=.*|RFO_JWT_SECRET=${JWT_SECRET}|" .env
-    else
-        echo "RFO_JWT_SECRET=${JWT_SECRET}" >> .env
-    fi
-    echo "JWT Secret wurde neu gesetzt."
+	# 3. RFO_JWT_SECRET generieren (nur wenn noch nicht gesetzt oder leer)
+	# Falls du es IMMER überschreiben willst, lösche die Bedingung "oder Wert ist leer"
+	if grep -q "^RFO_JWT_SECRET[[:space:]]*=" .env && [ -n "$(grep "^RFO_JWT_SECRET=" .env | cut -d= -f2)" ]; then
+		echo "RFO_JWT_SECRET ist bereits gesetzt. Überspringe Generierung."
+	else
+		JWT_SECRET=$(openssl rand -hex 32)
+		if grep -q "^RFO_JWT_SECRET[[:space:]]*=" .env; then
+			sed -i.bak "s,^RFO_JWT_SECRET[[:space:]]*=.*,RFO_JWT_SECRET=${JWT_SECRET}," .env && rm .env.bak
+		else
+			echo "RFO_JWT_SECRET=${JWT_SECRET}" >> .env
+		fi
+		echo "RFO_JWT_SECRET wurde neu gesetzt."
+	fi
 	
 	if [ "$OVERWRITE_DOCKER_COMPOSE" = "true" ]; then
         if [ -f "$SCRIPT_DIR/docker-compose-im.yml" ]; then
