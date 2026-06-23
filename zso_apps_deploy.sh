@@ -19,16 +19,16 @@ SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)
 # ==============================================================================
 # ENGINE DETECTION & INSTALLATION (Docker mit Fallback auf Podman)
 # ==============================================================================
-echo "Prüfe Container-Engine Verfügbarkeit..."
+echo "Pruefe Container-Engine Verfuegbarkeit..."
 
 if command -v dnf &> /dev/null; then
     IS_RHEL=true
     echo "RHEL based system erkannt!"
-    echo "Versuche Docker über DNF zu installieren..."
+    echo "Versuche Docker ueber DNF zu installieren..."
     if dnf install -y docker docker-compose-plugin openssl 2>/dev/null; then
         echo "Docker erfolgreich installiert."
     else
-        echo "Docker-Repository nicht verfügbar. Weiche auf Docker Repo aus"
+        echo "Docker-Repository nicht verfuegbar. Weiche auf Docker Repo aus"
 		sudo dnf -y install dnf-plugins-core
 		sudo dnf config-manager --add-repo https://download.docker.com/linux/rhel/docker-ce.repo
 		sudo dnf -y install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin openssl
@@ -40,27 +40,46 @@ elif command -v apt-get &> /dev/null; then
     apt-get install -y git docker.io docker-compose-v2 openssl
 elif [ -f /etc/synoinfo.conf ]; then
     IS_RHEL=false
-    echo "Synology NAS erkannt. Überprüfe installierte Pakete..."
+    echo "Synology NAS erkannt. ueberpruefe installierte Pakete..."
     
-    # Git und OpenSSL können via SynoCommunity (opkg) oder oft direkt genutzt werden.
-    # Docker/Docker-Compose sollte über das DSM Paketzentrum installiert sein.
+    # Git und OpenSSL koennen via SynoCommunity (opkg) oder oft direkt genutzt werden.
+    # Docker/Docker-Compose sollte ueber das DSM Paketzentrum installiert sein.
     if ! command -v docker &> /dev/null || ! docker compose version &> /dev/null; then
         echo "Fehler: Docker oder docker compose ist nicht auf der Synology installiert!"
-        echo "Bitte installiere das 'Container Manager' (DSM 7.2+) oder 'Docker' Paket über das DSM Paketzentrum."
+        echo "Bitte installiere das 'Container Manager' (DSM 7.2+) oder 'Docker' Paket ueber das DSM Paketzentrum."
         exit 1
     fi
-	#fallback für synology NAS ohne seccomp
+	#fallback fuer synology NAS ohne seccomp
     echo "Docker und docker compose sind auf der Synology bereit."
 else
-    echo "Fehler: Nicht unterstützte Distribution!"
+    echo "Fehler: Nicht unterstuetzte Distribution!"
     exit 1
 fi
+
+if ! docker buildx version > /dev/null 2>&1; then
+    echo "Buildx nicht gefunden. Lade es herunter..."
+    mkdir -p ~/.docker/cli-plugins
+    curl -L $BUILDX_URL -o ~/.docker/cli-plugins/docker-buildx
+    chmod +x ~/.docker/cli-plugins/docker-buildx
+fi
+
+# 2. Builder erstellen/aktivieren
+if ! docker buildx inspect $BUILDER_NAME > /dev/null 2>&1; then
+    echo "Erstelle neuen Builder: $BUILDER_NAME"
+    docker buildx create --name $BUILDER_NAME --use
+else
+    echo "Verwende bestehenden Builder: $BUILDER_NAME"
+    docker buildx use $BUILDER_NAME
+fi
+
+
+
 
 echo "Konfiguriere Docker-Dienst..."
 systemctl start docker
 systemctl enable docker
 
-# SELinux Berechtigungen (Nur für RHEL-Systeme relevant)
+# SELinux Berechtigungen (Nur fuer RHEL-Systeme relevant)
 if [ "$IS_RHEL" = true ]; then
     echo "Konfiguriere SELinux-Booleans..."
     setsebool -P container_manage_cgroup on || true
@@ -81,10 +100,11 @@ chown -R 65532:65532 ./certs
 # ==============================================================================
 # CENTRAL TRAEFIK PROXY
 # ==============================================================================
+echo "========================================================"
+echo "Richte zentralen Traefik Proxy ein..."
+echo "========================================================"
+
 if [ "$SETUP_TRAEFIK" = "true" ]; then
-    echo "========================================================"
-    echo "Richte zentralen Traefik Proxy ein..."
-    echo "========================================================"
     PROXY_APP_PATH=$SCRIPT_DIR
 	
 	# Gemeinsames Docker-Netzwerk anlegen
@@ -95,17 +115,20 @@ if [ "$SETUP_TRAEFIK" = "true" ]; then
     docker compose --env-file .env --ansi never up -d --quiet-pull
     cd - > /dev/null
 else
-    echo "Traefik Proxy Setup ist deaktiviert. Überspringe..."
+    echo "Traefik Proxy Setup ist deaktiviert. ueberspringe..."
 fi
 
+echo "========================================================"
 
 # ==============================================================================
 # WEB APP 1: PWA APP
 # ==============================================================================
+
+echo "========================================================"
+echo "Richte PWA ein..."
+echo "========================================================"
+
 if [ "$SETUP_PWA" = "true" ]; then
-    echo "========================================================"
-    echo "Richte PWA ein..."
-    echo "========================================================"
 
     if [ ! -d "$PWA_APP_PATH" ]; then
         git clone $PWA_GIT $PWA_APP_PATH
@@ -131,18 +154,18 @@ if [ "$SETUP_PWA" = "true" ]; then
     docker compose --env-file .env --ansi never up -d --quiet-pull
     cd - > /dev/null
 else
-    echo "PWA App Setup ist deaktiviert. Überspringe..."
+    echo "PWA App Setup ist deaktiviert. ueberspringe..."
 fi
-
+echo "========================================================"
 
 # ==============================================================================
 # WEB APP 2: Incident Manager
 # ==============================================================================
-if [ "$SETUP_INCIDENT_MANAGER" = "true" ]; then
-    echo "========================================================"
-    echo "Richte Incident Manager ein..."
-    echo "========================================================"
+echo "========================================================"
+echo "Richte Incident Manager ein..."
+echo "========================================================"
 	
+if [ "$SETUP_INCIDENT_MANAGER" = "true" ]; then
     if [ ! -d "$IM_APP_PATH" ]; then
         git clone $IM_GIT $IM_APP_PATH
     fi
@@ -176,14 +199,14 @@ if [ "$SETUP_INCIDENT_MANAGER" = "true" ]; then
 	
 	if [ "$OVERWRITE_DOCKER_COMPOSE" = "true" ]; then
         if [ -f "$SCRIPT_DIR/docker-compose-im.yml" ]; then
-            echo "Überschreibe docker-compose.yml im Incident Manager mit docker-compose-im.yml..."
+            echo "ueberschreibe docker-compose.yml im Incident Manager mit docker-compose-im.yml..."
             cp "$SCRIPT_DIR/docker-compose-im.yml" "$IM_APP_PATH/docker-compose.yml"
         else
             echo "Warnung: '$SCRIPT_DIR/docker-compose-im.yml' nicht gefunden! Standard-Datei wird verwendet."
         fi
     fi
 
-    echo "Installiere Frontend-Abhängigkeiten über Docker..."
+    echo "Installiere Frontend-Abhaengigkeiten ueber Docker..."
     docker compose run --rm --no-deps frontend sh -c "npm install"
 
     echo "Starte IM Backend (pre-import)"
@@ -198,25 +221,24 @@ if [ "$SETUP_INCIDENT_MANAGER" = "true" ]; then
            docker compose exec -T database sh -c 'mysql -uroot -p"${MYSQL_ROOT_PASSWORD}" "${MYSQL_DATABASE}" < /data-minimal.sql'
             ;;
         sample)
-            echo "Lade vollständige Sample-Daten..."
+            echo "Lade vollstaendige Sample-Daten..."
            docker compose exec -T database sh -c 'mysql -uroot -p"${MYSQL_ROOT_PASSWORD}" "${MYSQL_DATABASE}" < /data-sample.sql'
             ;;
         *)
-            echo "Überspringe das Laden von Demodaten."
+            echo "ueberspringe das Laden von Demodaten."
             ;;
     esac
 
     echo "Starte Incident Manager Container..."
     docker compose --env-file .env --ansi never up -d --quiet-pull
 	
-    echo "Setup für Incident Manager erfolgreich abgeschlossen!"
+    echo "Setup fuer Incident Manager erfolgreich abgeschlossen!"
     cd - > /dev/null
 else
-    echo "Incident Manager Setup ist deaktiviert. Überspringe..."
+    echo "Incident Manager Setup ist deaktiviert. ueberspringe..."
 fi
 
-
-
+echo "========================================================"
 
 # ==============================================================================
 # WEB APP 3: ZS Karte / offlinekarte
@@ -224,8 +246,9 @@ fi
 if [ "$SETUP_ZSK" = "true" ]; then
 	echo "Konfiguriere ZS Karte / offlinekarte"
 	
+	mkdir -p $OFK_PATH
 	cd $OFK_PATH
-	git clone git@github.com:zso-freiamt-it/offlinekarte.git -b zskarte/dev $OFK_PATH
+	git clone $OFK_GIT -b $OFK_BRANCH $OFK_PATH
 	git submodule update --init --recursive #load also submodules
 	
 	if grep -q "^OFK_TILE_DOMAIN=" .env; then
@@ -248,7 +271,7 @@ if [ "$SETUP_ZSK" = "true" ]; then
 	
 	if [ "$OVERWRITE_DOCKER_COMPOSE" = "true" ]; then
         if [ -f "$SCRIPT_DIR/docker-compose-offlinekarte.yml" ]; then
-            echo "Überschreibe docker-compose.yml in ZS-Karte mit docker-compose-offlinekarte.yml..."
+            echo "ueberschreibe docker-compose.yml in ZS-Karte mit docker-compose-offlinekarte.yml..."
             cp "$SCRIPT_DIR/docker-compose-offlinekarte.yml" "$OFK_PATH/docker-compose.yml"
         else
             echo "Warnung: '$SCRIPT_DIR/docker-compose-offlinekarte.yml' nicht gefunden! Standard-Datei wird verwendet."
@@ -264,14 +287,12 @@ if [ "$SETUP_ZSK" = "true" ]; then
 	
 	if [ "$OVERWRITE_DOCKER_COMPOSE" = "true" ]; then
         if [ -f "$SCRIPT_DIR/docker-compose-zskarte.yml" ]; then
-            echo "Überschreibe docker-compose.yml in ZS-Karte mit docker-compose-zskarte.yml..."
+            echo "ueberschreibe docker-compose.yml in ZS-Karte mit docker-compose-zskarte.yml..."
             cp "$SCRIPT_DIR/docker-compose-zskarte.yml" "$ZSK_PATH/docker-compose.yml"
         else
             echo "Warnung: '$SCRIPT_DIR/docker-compose-zskarte.yml' nicht gefunden! Standard-Datei wird verwendet."
         fi
     fi
-	
-	#/opt/zso/offlinekarte/zskarte/packages/server/.env
 	
 	# Create the data/postgresql folder
 	cd $ZSK_PATH
@@ -311,15 +332,15 @@ if [ "$SETUP_ZSK" = "true" ]; then
 		grep -E "apiUrl|tileUrl|searchUrl|searchLabel" "$ZSK_ENV_TS"
 		echo "----------------------------------------"
 	else
-		echo "Warnung: $ZSK_ENV_TS nicht gefunden. Überspringe Anpassung."
+		echo "Warnung: $ZSK_ENV_TS nicht gefunden. ueberspringe Anpassung."
 	fi
 	
 	docker compose up -d --force-recreate
 
 else
-    echo "Zivilschutz Karte / Offlinekarte Setup ist deaktiviert. Überspringe..."
+    echo "Zivilschutz Karte / Offlinekarte Setup ist deaktiviert. ueberspringe..."
 fi
-
+echo "========================================================"
 
 
 echo "========================================================"
