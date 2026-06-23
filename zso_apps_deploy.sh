@@ -56,25 +56,6 @@ else
     exit 1
 fi
 
-if ! docker buildx version > /dev/null 2>&1; then
-    echo "Buildx nicht gefunden. Lade es herunter..."
-    mkdir -p ~/.docker/cli-plugins
-    curl -L $BUILDX_URL -o ~/.docker/cli-plugins/docker-buildx
-    chmod +x ~/.docker/cli-plugins/docker-buildx
-fi
-
-# 2. Builder erstellen/aktivieren
-if ! docker buildx inspect $BUILDER_NAME > /dev/null 2>&1; then
-    echo "Erstelle neuen Builder: $BUILDER_NAME"
-    docker buildx create --name $BUILDER_NAME --use
-else
-    echo "Verwende bestehenden Builder: $BUILDER_NAME"
-    docker buildx use $BUILDER_NAME
-fi
-
-
-
-
 echo "Konfiguriere Docker-Dienst..."
 systemctl start docker
 systemctl enable docker
