@@ -22,7 +22,7 @@ services:
     command:
       - "--log.level=${TRAEFIK_LOG_LEVEL}"
       - "--providers.docker=true"
-      - "--providers.docker.exposedbydefault=false" # Zwingt Traefik, Container ohne traefik.enable=true komplett zu ignorieren
+      - "--providers.docker.exposedbydefault=false"
       - "--providers.docker.endpoint=tcp://socket-proxy:2375"
       - "--entrypoints.web.address=:${PROXY_HTTP_PORT}"
       - "--entrypoints.websecure.address=:${PROXY_HTTPS_PORT}"
