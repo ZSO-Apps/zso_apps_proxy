@@ -16,16 +16,17 @@ services:
           - socket-proxy
 
   traefik:
-    image: traefik:v3.0
+    image: traefik:latest
     container_name: zso_apps_proxy
     restart: unless-stopped
     command:
       - "--log.level=${TRAEFIK_LOG_LEVEL}"
       - "--providers.docker=true"
-      - "--providers.docker.exposedbydefault=false"
+      - "--providers.docker.exposedbydefault=false" # Zwingt Traefik, Container ohne traefik.enable=true komplett zu ignorieren
       - "--providers.docker.endpoint=tcp://socket-proxy:2375"
       - "--entrypoints.web.address=:${PROXY_HTTP_PORT}"
       - "--entrypoints.websecure.address=:${PROXY_HTTPS_PORT}"
+      # Wir aktivieren TLS und den Resolver wieder global auf dem HTTPS-Port, damit Traefik die Hoheit hat:
       - "--entrypoints.websecure.http.tls.certresolver=myresolver"
       - "--certificatesresolvers.myresolver.acme.httpchallenge=true"
       - "--certificatesresolvers.myresolver.acme.httpchallenge.entrypoint=web"
