@@ -190,18 +190,20 @@ if [ "$SETUP_INCIDENT_MANAGER" = "true" ]; then
 		echo "APP_DOMAIN=${IM_DOMAIN}" >> .env
 	fi
 
-	# 3. RFO_JWT_SECRET generieren (nur wenn noch nicht gesetzt oder leer)
-	# Falls du es IMMER überschreiben willst, lösche die Bedingung "oder Wert ist leer"
-	if grep -q "^RFO_JWT_SECRET[[:space:]]*=" .env && [ -n "$(grep "^RFO_JWT_SECRET=" .env | cut -d= -f2)" ]; then
-		echo "RFO_JWT_SECRET ist bereits gesetzt. Überspringe Generierung."
+	# Sucht nach RFO_JWT_SECRET und schaut, ob der Wert "secret-key" enthält oder leer ist
+	if grep -q "^RFO_JWT_SECRET[[:space:]]*=" .env && ! grep -q "secret-key" .env; then
+		echo "Ein echtes RFO_JWT_SECRET ist bereits gesetzt. Überspringe."
 	else
+		echo "Generiere echtes JWT Secret..."
 		JWT_SECRET=$(openssl rand -hex 32)
+		
 		if grep -q "^RFO_JWT_SECRET[[:space:]]*=" .env; then
+			# Ersetzt die KOMPLETTE Zeile, um den Dummy-Wert und den Kommentar zu löschen
 			sed -i.bak "s,^RFO_JWT_SECRET[[:space:]]*=.*,RFO_JWT_SECRET=${JWT_SECRET}," .env && rm .env.bak
 		else
 			echo "RFO_JWT_SECRET=${JWT_SECRET}" >> .env
 		fi
-		echo "RFO_JWT_SECRET wurde neu gesetzt."
+		echo "RFO_JWT_SECRET wurde sauber neu gesetzt."
 	fi
 	
 	if [ "$OVERWRITE_DOCKER_COMPOSE" = "true" ]; then
