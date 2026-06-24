@@ -32,7 +32,15 @@ if [ "$CMD" = "init" ]; then
 	if [ ! -f "$ZSKARTE_PATH/packages/server/.env" ]; then
 		cp "$ZSKARTE_PATH/packages/server/.env.example" "$ZSKARTE_PATH/packages/server/.env"
 	fi
-		
+	
+	if [ ! -f "$OFFLINEKARTE_PATH/searchserv/search-db.env" ]; then
+		cp "$OFFLINEKARTE_PATH/searchserv/search-db.env.example" "$OFFLINEKARTE_PATH/searchserv/search-db.env"
+	fi
+	
+	if [ ! -f "$OFFLINEKARTE_PATH/searchserv/search.env" ]; then
+		cp "$OFFLINEKARTE_PATH/searchserv/search.env.example" "$OFFLINEKARTE_PATH/searchserv/search.env"
+	fi
+	
 	mkdir -p $ZSKARTE_PATH/data/postgresql
 	sudo chown -R 1001:1001 $ZSKARTE_PATH/data/postgresql
 	mkdir -p $ZSKARTE_PATH/data/pgadmin
