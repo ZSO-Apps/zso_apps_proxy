@@ -2,6 +2,7 @@
 
 CMD=$1
 APPNAME=offlinekarte
+SCRIPTFOLDER=$(pwd)
 
 if [ -f ".env" ]; then
     echo "Lade Konfiguration aus .env Datei..."
@@ -60,11 +61,11 @@ if [ "$CMD" = "init" ]; then
 	echo "----------------------------------------"
 	echo "offlinekarte Konfiguration (inkl. override)"
 	echo "----------------------------------------"
-	docker compose -f $OFFLINEKARTE_PATH/docker-compose.yml -f $(pwd)/docker-compose-offlinekarte.yml --env-file $(pwd)/.env config
+	docker compose -f $OFFLINEKARTE_PATH/docker-compose.yml -f $SCRIPTFOLDER/docker-compose-offlinekarte.yml --env-file $SCRIPTFOLDER/.env config
 	echo "----------------------------------------"
 	echo "zskarte Konfiguration (inkl. override)"
 	echo "----------------------------------------"
-	docker compose -f $ZSKARTE_PATH/docker-compose.yml -f $(pwd)/docker-compose-zskarte.yml --env-file $(pwd)/.env config
+	docker compose -f $ZSKARTE_PATH/docker-compose.yml -f $SCRIPTFOLDER/docker-compose-zskarte.yml --env-file $SCRIPTFOLDER/.env config
 	echo "----------------------------------------"
 	
     echo "${APPNAME} complete."
@@ -72,8 +73,8 @@ if [ "$CMD" = "init" ]; then
 elif [ "$CMD" = "start" ]; then
     echo "Starting ${APPNAME}..."
 
-    docker compose up -d -f $OFFLINEKARTE_PATH/docker-compose.yml -f $(pwd)/docker-compose-offlinekarte.yml
-	docker compose up -d -f $ZSKARTE_PATH/docker-compose.yml -f $(pwd)/docker-compose-zskarte.yml
+    docker compose up -d -f $OFFLINEKARTE_PATH/docker-compose.yml -f $SCRIPTFOLDER/docker-compose-offlinekarte.yml --env-file $SCRIPTFOLDER/.env
+	docker compose up -d -f $ZSKARTE_PATH/docker-compose.yml -f $SCRIPTFOLDER)/docker-compose-zskarte.yml --env-file $SCRIPTFOLDER/.env
 
     echo "${APPNAME} started."
 
