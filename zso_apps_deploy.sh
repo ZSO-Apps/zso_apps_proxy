@@ -16,58 +16,11 @@ fi
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)
 
-# ==============================================================================
-# ENGINE DETECTION & INSTALLATION (Docker mit Fallback auf Podman)
-# ==============================================================================
-echo "Pruefe Container-Engine Verfuegbarkeit..."
 
-if command -v dnf &> /dev/null; then
-    IS_RHEL=true
-    echo "RHEL based system erkannt!"
-    echo "Versuche Docker ueber DNF zu installieren..."
-    if dnf install -y docker docker-compose-plugin openssl 2>/dev/null; then
-        echo "Docker erfolgreich installiert."
-    else
-        echo "Docker-Repository nicht verfuegbar. Weiche auf Docker Repo aus"
-		sudo dnf -y install dnf-plugins-core
-		sudo dnf config-manager --add-repo https://download.docker.com/linux/rhel/docker-ce.repo
-		sudo dnf -y install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin openssl
-    fi
-elif command -v apt-get &> /dev/null; then
-    IS_RHEL=false
-	echo "Debian based system erkannt!"
-    apt-get update
-    apt-get install -y git docker.io docker-compose-v2 openssl
-elif [ -f /etc/synoinfo.conf ]; then
-    IS_RHEL=false
-    echo "Synology NAS erkannt. ueberpruefe installierte Pakete..."
-    
-    # Git und OpenSSL koennen via SynoCommunity (opkg) oder oft direkt genutzt werden.
-    # Docker/Docker-Compose sollte ueber das DSM Paketzentrum installiert sein.
-    if ! command -v docker &> /dev/null || ! docker compose version &> /dev/null; then
-        echo "Fehler: Docker oder docker compose ist nicht auf der Synology installiert!"
-        echo "Bitte installiere das 'Container Manager' (DSM 7.2+) oder 'Docker' Paket ueber das DSM Paketzentrum."
-        exit 1
-    fi
-	#fallback fuer synology NAS ohne seccomp
-    echo "Docker und docker compose sind auf der Synology bereit."
-else
-    echo "Fehler: Nicht unterstuetzte Distribution!"
+# Precheck
+if ! docker info > /dev/null 2>&1; then
+    echo "Error: Docker läuft aktuell nicht!" >&2
     exit 1
-fi
-
-echo "Konfiguriere Docker-Dienst..."
-systemctl start docker
-systemctl enable docker
-
-# SELinux Berechtigungen (Nur fuer RHEL-Systeme relevant)
-if [ "$IS_RHEL" = true ]; then
-    echo "Konfiguriere SELinux-Booleans..."
-    setsebool -P container_manage_cgroup on || true
-    
-	dnf install -y policycoreutils-python-utils
-	semanage fcontext -a -t container_runtime_tmp_t "/run/docker.sock" 2>/dev/null || true
-	restorecon -v /run/docker.sock || true
 fi
 
 # Let's Encrypt Ordner und Rechte vorbereiten
@@ -75,8 +28,6 @@ mkdir -p ./certs
 touch ./certs/acme.json
 chmod 600 ./certs/acme.json
 chown -R 65532:65532 ./certs
-
-
 
 # ==============================================================================
 # CENTRAL TRAEFIK PROXY
@@ -86,15 +37,7 @@ echo "Richte zentralen Traefik Proxy ein..."
 echo "========================================================"
 
 if [ "$SETUP_TRAEFIK" = "true" ]; then
-    PROXY_APP_PATH=$SCRIPT_DIR
-	
-	# Gemeinsames Docker-Netzwerk anlegen
-	if ! docker network inspect proxy-network >/dev/null 2>&1; then
-		docker network create proxy-network
-	fi   
-   
-    docker compose --env-file .env --ansi never up -d --quiet-pull
-    cd - > /dev/null
+    bash $SCRIPT_DIR/zso_traefik.sh init
 else
     echo "Traefik Proxy Setup ist deaktiviert. ueberspringe..."
 fi
@@ -110,30 +53,7 @@ echo "Richte PWA ein..."
 echo "========================================================"
 
 if [ "$SETUP_PWA" = "true" ]; then
-
-    if [ ! -d "$PWA_APP_PATH" ]; then
-        git clone $PWA_GIT $PWA_APP_PATH
-    fi
-
-    cd $PWA_APP_PATH
-
-    touch .env
-
-    if grep -q "^APP_DOMAIN=" .env; then
-        sed -i "s|^APP_DOMAIN=.*|APP_DOMAIN=${PWA_DOMAIN}|" .env
-    else
-        echo "APP_DOMAIN=${PWA_DOMAIN}" >> .env
-    fi
-    echo "PWA APP_DOMAIN auf '${PWA_DOMAIN}' konfiguriert."
-
-    mkdir -p data
-    chmod 777 data
-
-    docker compose build
-    docker compose run --rm pwa-app npm run seed-users
-
-    docker compose --env-file .env --ansi never up -d --quiet-pull
-    cd - > /dev/null
+	bash $SCRIPT_DIR/zso_pwa_app.sh init
 else
     echo "PWA App Setup ist deaktiviert. ueberspringe..."
 fi
@@ -234,104 +154,11 @@ echo "========================================================"
 # WEB APP 3: ZS Karte / offlinekarte
 # ==============================================================================
 if [ "$SETUP_ZSK" = "true" ]; then
-	echo "Konfiguriere ZS Karte / offlinekarte"
-	
-	mkdir -p $OFK_PATH
-	cd $OFK_PATH
-	git clone $OFK_GIT -b $OFK_BRANCH $OFK_PATH
-	git submodule update --init --recursive #load also submodules
-	
-	if grep -q "^OFK_TILE_DOMAIN=" .env; then
-        sed -i "s|^OFK_TILE_DOMAIN=.*|OFK_TILE_DOMAIN=${OFK_TILE_DOMAIN}|" .env
-    else
-        echo "OFK_TILE_DOMAIN=${OFK_TILE_DOMAIN}" >> .env
-    fi
-
-	if grep -q "^OFK_SEARCH_DOMAIN=" .env; then
-        sed -i "s|^OFK_SEARCH_DOMAIN=.*|OFK_SEARCH_DOMAIN=${OFK_SEARCH_DOMAIN}|" .env
-    else
-        echo "OFK_SEARCH_DOMAIN=${OFK_SEARCH_DOMAIN}" >> .env
-    fi		
-	
-	if grep -q "^TILESERVER_GL_ALLOWED_HOSTS=" .env; then
-        sed -i "s|^TILESERVER_GL_ALLOWED_HOSTS=.*|TILESERVER_GL_ALLOWED_HOSTS=${OFK_TILE_DOMAIN}|" tileserver.env
-    else
-        echo "TILESERVER_GL_ALLOWED_HOSTS=${OFK_TILE_DOMAIN}" >> tileserver.env
-    fi
-	
-	if [ "$OVERWRITE_DOCKER_COMPOSE" = "true" ]; then
-        if [ -f "$SCRIPT_DIR/docker-compose-offlinekarte.yml" ]; then
-            echo "ueberschreibe docker-compose.yml in ZS-Karte mit docker-compose-offlinekarte.yml..."
-            cp "$SCRIPT_DIR/docker-compose-offlinekarte.yml" "$OFK_PATH/docker-compose.yml"
-        else
-            echo "Warnung: '$SCRIPT_DIR/docker-compose-offlinekarte.yml' nicht gefunden! Standard-Datei wird verwendet."
-        fi
-    fi
-	
-	# Starte offlinekarte (tileserver und searchserver)
-	bash $OFK_PATH/zskarte.sh init
-	bash $OFK_PATH/zskarte.sh start
-	
-	echo "init ZSKARTE"
-	#### ZSKARTE
-	
-	if [ "$OVERWRITE_DOCKER_COMPOSE" = "true" ]; then
-        if [ -f "$SCRIPT_DIR/docker-compose-zskarte.yml" ]; then
-            echo "ueberschreibe docker-compose.yml in ZS-Karte mit docker-compose-zskarte.yml..."
-            cp "$SCRIPT_DIR/docker-compose-zskarte.yml" "$ZSK_PATH/docker-compose.yml"
-        else
-            echo "Warnung: '$SCRIPT_DIR/docker-compose-zskarte.yml' nicht gefunden! Standard-Datei wird verwendet."
-        fi
-    fi
-	
-	# Create the data/postgresql folder
-	cd $ZSK_PATH
-	
-	grep ZSK $SCRIPT_DIR/.env > $ZSK_PATH/.env
-	
-	cp $ZSK_PATH/packages/server/.env.example $ZSK_PATH/packages/server/.env
-	
-	mkdir -p $ZSK_PATH/data/postgresql
-	# Add the UID 1001 (non-root user of postgresql) as the folder owner
-	sudo chown -R 1001:1001 $ZSK_PATH/data/postgresql
-	# Create the data/pgadmin folder
-	mkdir -p $ZSK_PATH/data/pgadmin
-	# Add the UID 5050 (non-root user of pgadmin) as the folder owner
-	sudo chown -R 5050:5050 $ZSK_PATH/data/pgadmin
-	
-	#../zskarte/packages/app/src/environments/environment.prod.ts
-	if [ -f "$ZSK_ENV_TS" ]; then
-		echo "Passe TypeScript Environments an..."
-		
-		# Protokoll dynamisch anhand der TLS-Variable bestimmen
-		if [ "$ZSK_ENABLE_TLS" = "true" ]; then
-			PROTO="https"
-			echo "TLS ist aktiviert -> Nutze https://"
-		else
-			PROTO="http"
-			echo "TLS ist deaktiviert -> Nutze http://"
-		fi
-
-		sed -i "s|apiUrl:.*|apiUrl: '${PROTO}://${ZSK_API_DOMAIN}${ZSK_API_PATH}',|" "$ZSK_ENV_TS"
-		sed -i "s|tileUrl:.*|tileUrl: '${PROTO}://${OFK_TILE_DOMAIN}${OFK_TILE_PATH}',|" "$ZSK_ENV_TS"
-		sed -i "s|searchUrl:.*|searchUrl: '${PROTO}://${OFK_SEARCH_DOMAIN}${OFK_SEARCH_PATH}',|" "$ZSK_ENV_TS"
-		sed -i "s|searchLabel:.*|searchLabel: '${ZSK_SEARCH_LABEL}',|" "$ZSK_ENV_TS"
-		
-		echo "TypeScript Environments erfolgreich aktualisiert."
-		echo "----------------------------------------"
-		grep -E "apiUrl|tileUrl|searchUrl|searchLabel" "$ZSK_ENV_TS"
-		echo "----------------------------------------"
-	else
-		echo "Warnung: $ZSK_ENV_TS nicht gefunden. ueberspringe Anpassung."
-	fi
-	
-	docker compose up -d --force-recreate
-
+	bash $SCRIPT_DIR/offlinekarte.sh init
 else
     echo "Zivilschutz Karte / Offlinekarte Setup ist deaktiviert. ueberspringe..."
 fi
 echo "========================================================"
-
 
 echo "========================================================"
 echo " Gesamtes Setup abgeschlossen!"

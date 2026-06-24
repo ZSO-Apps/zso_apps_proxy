@@ -29,6 +29,8 @@ if [ "$CMD" = "init" ]; then
         git clone $PWA_GIT $PWA_APP_PATH
     fi
 	
+	docker compose -f $PWA_APP_PATH/docker-compose.yml -f $SCRIPTDIR/docker-compose-pwa.yml --env-file $SCRIPTDIR/.env build --no-cache
+
     echo "${APPNAME} initialized."
 
 elif [ "$CMD" = "start" ]; then
