@@ -26,11 +26,10 @@ services:
       - "--providers.docker.endpoint=tcp://socket-proxy:2375"
       - "--entrypoints.web.address=:${PROXY_HTTP_PORT}"
       - "--entrypoints.websecure.address=:${PROXY_HTTPS_PORT}"
-      # Wir aktivieren TLS und den Resolver wieder global auf dem HTTPS-Port, damit Traefik die Hoheit hat:
       - "--entrypoints.websecure.http.tls.certresolver=myresolver"
       - "--certificatesresolvers.myresolver.acme.httpchallenge=true"
       - "--certificatesresolvers.myresolver.acme.httpchallenge.entrypoint=web"
-      - "--certificatesresolvers.myresolver.acme.email=${ACME_EMAIL}"
+      - "--certificatesresolvers.myresolver.acme.email=${ACME_MAIL}"
       - "--certificatesresolvers.myresolver.acme.storage=/certs/acme.json"
     ports:
       - "${PROXY_HTTP_PORT}:${PROXY_HTTP_PORT}"
