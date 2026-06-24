@@ -23,6 +23,10 @@ if [ "$CMD" = "init" ]; then
 
 	bash $OFFLINEKARTE_PATH/zskarte.sh init
 
+
+	touch $OFFLINEKARTE_PATH/.env
+	touch $ZSKARTE_PATH/.env
+
 	echo "Running init for zskarte submodule"
 	
 	if [ ! -f "$ZSKARTE_PATH/packages/server/.env" ]; then
@@ -84,7 +88,20 @@ elif [ "$CMD" = "update" ]; then
     # to be build
 
     echo "${APPNAME} updated."
+elif [ "$CMD" = "config" ]; then
+    echo "Load config of ${APPNAME}..."
+	echo "----------------------------------------"
+	grep -E "apiUrl|tileUrl|searchUrl|searchLabel" "$ZSKARTE_ENV_TS"
+	echo "----------------------------------------"
+	echo "offlinekarte Konfiguration (inkl. override)"
+	echo "----------------------------------------"
+	docker compose -f $OFFLINEKARTE_PATH/docker-compose.yml -f $SCRIPTFOLDER/docker-compose-offlinekarte.yml --env-file $SCRIPTFOLDER/.env config
+	echo "----------------------------------------"
+	echo "zskarte Konfiguration (inkl. override)"
+	echo "----------------------------------------"
+	docker compose -f $ZSKARTE_PATH/docker-compose.yml -f $SCRIPTFOLDER/docker-compose-zskarte.yml --env-file $SCRIPTFOLDER/.env config
+	echo "----------------------------------------"
 else
-    echo "Usage: ./offlinekarte.sh {init|update|start}"
+    echo "Usage: ./offlinekarte.sh {init|update|start|config}"
     exit 1
 fi
