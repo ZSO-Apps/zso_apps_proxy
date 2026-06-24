@@ -49,7 +49,7 @@ elif [ "$CMD" = "start" ]; then
 elif [ "$CMD" = "update" ]; then
     echo "Updating ${APPNAME}..."
 
-    # to be build
+    docker compose -f docker-compose-zsotraefik.yml --env-file .env --ansi never up -d --quiet-pull --build --force-recreate
 
     echo "${APPNAME} updated."
 elif [ "$CMD" = "config" ]; then

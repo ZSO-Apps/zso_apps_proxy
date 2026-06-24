@@ -4,6 +4,34 @@ CMD=$1
 APPNAME=offlinekarte
 SCRIPTDIR=$(pwd)
 
+
+set_zskarte_app_environment(){
+	if [ -f "$ZSKARTE_ENV_TS" ]; then
+		echo "Passe TypeScript Environments an..."
+		
+		# Protokoll dynamisch anhand der TLS-Variable bestimmen
+		if [ "$ZSKARTE_ENABLE_TLS" = "true" ]; then
+			PROTO="https"
+			echo "TLS ist aktiviert -> Nutze https://"
+		else
+			PROTO="http"
+			echo "TLS ist deaktiviert -> Nutze http://"
+		fi
+
+		sed -i "s|apiUrl:.*|apiUrl: '${PROTO}://${ZSKARTE_API_DOMAIN}${ZSKARTE_API_PATH}',|" "$ZSKARTE_ENV_TS"
+		sed -i "s|tileUrl:.*|tileUrl: '${PROTO}://${OFFLINEKARTE_TILESERVER_DOMAIN}${OFFLINEKARTE_TILESERVER_PATH}',|" "$ZSKARTE_ENV_TS"
+		sed -i "s|searchUrl:.*|searchUrl: '${PROTO}://${OFFLINEKARTE_SEARCHSERVER_DOMAIN}${OFFLINEKARTE_SEARCHSERVER_PATH}',|" "$ZSKARTE_ENV_TS"
+		sed -i "s|searchLabel:.*|searchLabel: '${ZSKARTE_SEARCH_LABEL}',|" "$ZSKARTE_ENV_TS"
+		
+		echo "TypeScript Environments erfolgreich aktualisiert."
+		echo "----------------------------------------"
+		grep -E "apiUrl|tileUrl|searchUrl|searchLabel" "$ZSKARTE_ENV_TS"
+		echo "----------------------------------------"
+	else
+		echo "Warnung: $ZSKARTE_ENV_TS nicht gefunden. ueberspringe Anpassung."
+	fi
+}
+
 if [ -f ".env" ]; then
     echo "Lade Konfiguration aus .env Datei..."
     set -a
@@ -65,40 +93,11 @@ if [ "$CMD" = "init" ]; then
 	mkdir -p $ZSKARTE_PATH/data/pgadmin
 	sudo chown -R 5050:5050 $ZSKARTE_PATH/data/pgadmin
 
-	if [ -f "$ZSKARTE_ENV_TS" ]; then
-		echo "Passe TypeScript Environments an..."
-		
-		# Protokoll dynamisch anhand der TLS-Variable bestimmen
-		if [ "$ZSKARTE_ENABLE_TLS" = "true" ]; then
-			PROTO="https"
-			echo "TLS ist aktiviert -> Nutze https://"
-		else
-			PROTO="http"
-			echo "TLS ist deaktiviert -> Nutze http://"
-		fi
-
-		sed -i "s|apiUrl:.*|apiUrl: '${PROTO}://${ZSKARTE_API_DOMAIN}${ZSKARTE_API_PATH}',|" "$ZSKARTE_ENV_TS"
-		sed -i "s|tileUrl:.*|tileUrl: '${PROTO}://${OFFLINEKARTE_TILESERVER_DOMAIN}${OFFLINEKARTE_TILESERVER_PATH}',|" "$ZSKARTE_ENV_TS"
-		sed -i "s|searchUrl:.*|searchUrl: '${PROTO}://${OFFLINEKARTE_SEARCHSERVER_DOMAIN}${OFFLINEKARTE_SEARCHSERVER_PATH}',|" "$ZSKARTE_ENV_TS"
-		sed -i "s|searchLabel:.*|searchLabel: '${ZSKARTE_SEARCH_LABEL}',|" "$ZSKARTE_ENV_TS"
-		
-		echo "TypeScript Environments erfolgreich aktualisiert."
-		echo "----------------------------------------"
-		grep -E "apiUrl|tileUrl|searchUrl|searchLabel" "$ZSKARTE_ENV_TS"
-		echo "----------------------------------------"
-	else
-		echo "Warnung: $ZSKARTE_ENV_TS nicht gefunden. ueberspringe Anpassung."
-	fi
-	echo "----------------------------------------"
-	echo "offlinekarte Konfiguration (inkl. override)"
-	echo "----------------------------------------"
-	docker compose -f $OFFLINEKARTE_PATH/docker-compose.yml -f $SCRIPTDIR/docker-compose-offlinekarte.yml --env-file $SCRIPTDIR/.env config
-	echo "----------------------------------------"
-	echo "zskarte Konfiguration (inkl. override)"
-	echo "----------------------------------------"
-	docker compose -f $ZSKARTE_PATH/docker-compose.yml -f $SCRIPTDIR/docker-compose-zskarte.yml --env-file $SCRIPTDIR/.env config
-	echo "----------------------------------------"
+	set_zskarte_app_environment
 	
+	docker compose -f "$OFFLINEKARTE_PATH/docker-compose.yml" -f "$SCRIPTDIR/docker-compose-offlinekarte.yml" --env-file "$SCRIPTDIR/.env" build
+	docker compose -f "$ZSKARTE_PATH/docker-compose.yml" -f "$SCRIPTDIR/docker-compose-zskarte.yml" --env-file "$SCRIPTDIR/.env" build
+
     echo "${APPNAME} complete."
 
 elif [ "$CMD" = "start" ]; then
@@ -111,8 +110,11 @@ elif [ "$CMD" = "start" ]; then
 
 elif [ "$CMD" = "update" ]; then
     echo "Updating ${APPNAME}..."
+	
+	set_zskarte_app_environment
 
-    # to be build
+	docker compose -f "$OFFLINEKARTE_PATH/docker-compose.yml" -f "$SCRIPTDIR/docker-compose-offlinekarte.yml" --env-file "$SCRIPTDIR/.env" build
+	docker compose -f "$ZSKARTE_PATH/docker-compose.yml" -f "$SCRIPTDIR/docker-compose-zskarte.yml" --env-file "$SCRIPTDIR/.env" build
 
     echo "${APPNAME} updated."
 elif [ "$CMD" = "config" ]; then
@@ -128,7 +130,13 @@ elif [ "$CMD" = "config" ]; then
 	echo "----------------------------------------"
 	docker compose -f $ZSKARTE_PATH/docker-compose.yml -f $SCRIPTDIR/docker-compose-zskarte.yml --env-file $SCRIPTDIR/.env config
 	echo "----------------------------------------"
+	
+elif [ "$CMD" = "stop" ]; then
+	echo "Stoppe ZSKARTE/offlinekarte ..."
+	docker compose -f "$OFFLINEKARTE_PATH/docker-compose.yml" -f "$SCRIPTDIR/docker-compose-offlinekarte.yml" --env-file "$SCRIPTDIR/.env" stop
+	docker compose -f "$ZSKARTE_PATH/docker-compose.yml" -f "$SCRIPTDIR/docker-compose-zskarte.yml" --env-file "$SCRIPTDIR/.env" stop
+	echo "ZSKARTE/offlinekarte gestoppt!"
 else
-    echo "Usage: ./offlinekarte.sh {init|update|start|config}"
+    echo "Usage: ./offlinekarte.sh {init|update|start|stop|config}"
     exit 1
 fi
