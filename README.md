@@ -39,5 +39,31 @@ systemctl start docker
 systemctl enable docker
 ```
 
+## 5. Netzwerk und DNS Konfiguration
+### Netzwerk
+Falls die Apps von ausserhalb des ZS-Standortes genutzt werden sollen, so müssen hierfür Portweiterleitungen und/oder Firewall-Regeln erstellt werden.
+Beim Einsatz von Traefik reicht es, wenn von Extern die Ports 80 und 443 auf die Ports von Traefik (Standardmässig 18080 und 18443) weitergeleitet werden.
+
+### DNS
+Traefik erstellt und verwaltet standardmässig auch Let's Encrypt Zertifikate. Beim Einsatz von statischen IP Adressen können die Einträge manuell der ZS-eigenen Domain eingerichtet werden. 
+Dynamische IP-Adressen erfordern einen Zwischenschritt über einen DynDNS Anbieter. Die DynDNS-Adresse kann dann entweder direkt genutzt oder als CNAME bei der ZS-eigenen Domain eingerichtet werden. 
+#### Beispiel statische Adresse:
+app.zso.example.org A 1.2.3.4
+#### Beispiel dynamische Adresse:
+app.zso.example.org CNAME zso.dyndns-example.org
 
 
+## 5. Apps initialisieren
+Die ZSO Apps können grundsätzlich ohne Traefik (zso_traefik.sh) genutzt werden. Dies empfiehlt sich vor allem, bei Umgebungen mit vorhandenem Proxy oder wo keine HTTPS-Verbindung benötigt wird (z.B. KP intern).
+Traefik wird in diesem Setup als Proxy vor die Docker Container gestellt.
+Beispiel:
+offlinekarte mit der Domain maps.zso.example.org 
+incident-manager erhält die Domain im.zso.example.org
+```
+./zso_traefik.sh init
+```
+
+
+## X. Troubleshooting
+### Portkonflikte
+Bei Portkonflikten müssen die entsprechenden _PORT-Variabeln in der .env-Datei angepasst werden.
