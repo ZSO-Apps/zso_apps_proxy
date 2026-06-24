@@ -12,7 +12,7 @@ services:
       - PGADMIN_DEFAULT_PASSWORD=zskarte
 
   server-zskarte:
-    ports:
+    ports: !override
       - "${ZSKARTE_API_PORT}:1337"
     environment:
       - DATABASE_HOST=postgresql-zskarte
@@ -38,7 +38,7 @@ services:
       - "traefik.http.services.zsk-api-service.loadbalancer.server.port=1337"
 
   app-zskarte:
-    ports:
+    ports: !override
       - "${ZSKARTE_MAIN_PORT}:80"
     env_file:
       - .env

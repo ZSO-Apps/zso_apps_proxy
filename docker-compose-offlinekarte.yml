@@ -4,7 +4,7 @@ services:
       - default
 
   offlinekarte-search:
-    ports:
+    ports: !override
       - "${OFFLINEKARTE_SEARCHSERVER_PORT}:8000"
     env_file:
       - .env
@@ -34,7 +34,7 @@ services:
     networks:
       - proxy-network
       - default
-    ports:
+    ports: !override
       - "${OFFLINEKARTE_TILESERVER_PORT}:8080"
     labels:
       - "traefik.enable=true"
