@@ -1,19 +1,11 @@
 services:
   offlinekarte-search-db:
-    image: postgis/postgis
-    container_name: offlinekarte-search-db
-    volumes:
-      - ./searchserv/initdb.d:/docker-entrypoint-initdb.d
-    environment:
-      - POSTGRES_PASSWORD=postgres
     networks:
       - default
 
   offlinekarte-search:
-    build: ./searchserv/
-    container_name: offlinekarte-search
     ports:
-      - "8000:8000"
+      - "${OFFLINEKARTE_SEARCHSERVER_PORT}:8000"
     env_file:
       - .env
     networks:
@@ -22,57 +14,42 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=proxy-network"
-      
-      # HTTP Router & Redirect zu HTTPS
       - "traefik.http.routers.offline-search-http.entrypoints=web"
-      - "traefik.http.routers.offline-search-http.rule=Host(`${OFK_SEARCH_DOMAIN}`)"
+      - "traefik.http.routers.offline-search-http.rule=Host(`${OFFLINEKARTE_SEARCH_DOMAIN}`)"
       - "traefik.http.routers.offline-search-http.service=offline-search-service"
       - "traefik.http.routers.offline-search-http.middlewares=offline-search-redirect"
       - "traefik.http.middlewares.offline-search-redirect.redirectscheme.scheme=https"
-      
-      # HTTPS Router
       - "traefik.http.routers.offline-search-secure.entrypoints=websecure"
-      - "traefik.http.routers.offline-search-secure.rule=Host(`${OFK_SEARCH_DOMAIN}`)"
+      - "traefik.http.routers.offline-search-secure.rule=Host(`${OFFLINEKARTE_SEARCH_DOMAIN}`)"
       - "traefik.http.routers.offline-search-secure.tls=true"
       - "traefik.http.routers.offline-search-secure.tls.certresolver=myresolver"
       - "traefik.http.routers.offline-search-secure.service=offline-search-service"
-      
-      # Interner Port des Search-Service
-      - "traefik.http.services.offline-search-service.loadbalancer.server.port=8000"
+      - "traefik.http.services.offline-search-service.loadbalancer.server.port=${OFFLINEKARTE_SEARCHSERVER_PORT}"
 
   offlinekarte-tileserver:
-    image: maptiler/tileserver-gl
-    container_name: offlinekarte-tileserver
-    ports:
-      - "8080:8080"
-    volumes:
-      - ./mapserv/data:/data
     env_file:
-      - tileserver.env
       - .env
+    environments:
+      - TILESERVER_GL_ALLOWED_HOSTS=${OFFLINEKARTE_TILESERVER_DOMAIN}
     networks:
       - proxy-network
       - default
+    ports:
+      - "${OFFLINEKARTE_TILESERVER_PORT}:8080"
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=proxy-network"
-      
-      # HTTP Router & Redirect zu HTTPS
       - "traefik.http.routers.offline-tiles-http.entrypoints=web"
-      - "traefik.http.routers.offline-tiles-http.rule=Host(`${OFK_TILE_DOMAIN}`)"
+      - "traefik.http.routers.offline-tiles-http.rule=Host(`${OFFLINEKARTE_TILESERVER_DOMAIN}`)"
       - "traefik.http.routers.offline-tiles-http.service=offline-tiles-service"
       - "traefik.http.routers.offline-tiles-http.middlewares=offline-tiles-redirect"
       - "traefik.http.middlewares.offline-tiles-redirect.redirectscheme.scheme=https"
-      
-      # HTTPS Router
       - "traefik.http.routers.offline-tiles-secure.entrypoints=websecure"
-      - "traefik.http.routers.offline-tiles-secure.rule=Host(`${OFK_TILE_DOMAIN}`)"
+      - "traefik.http.routers.offline-tiles-secure.rule=Host(`${OFFLINEKARTE_TILESERVER_DOMAIN}`)"
       - "traefik.http.routers.offline-tiles-secure.tls=true"
       - "traefik.http.routers.offline-tiles-secure.tls.certresolver=myresolver"
       - "traefik.http.routers.offline-tiles-secure.service=offline-tiles-service"
-      
-      # Interner Port des Tileservers
-      - "traefik.http.services.offline-tiles-service.loadbalancer.server.port=8080"
+      - "traefik.http.services.offline-tiles-service.loadbalancer.server.port=${OFFLINEKARTE_TILESERVER_PORT}"
 
 networks:
   proxy-network:
