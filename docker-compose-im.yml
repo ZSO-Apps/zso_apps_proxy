@@ -48,9 +48,8 @@ services:
     working_dir: /app
     restart: always
     networks:
-      default:
-        aliases:
-          - backend-${RFO_STAGE}
+      - proxy-network  # BEHOBEN: Traefik muss das Backend im selben Netzwerk erreichen kÃ¶n
+      - default
     environment:
       - SPRING_JPA_SHOW_SQL=true
     ports:
@@ -62,6 +61,26 @@ services:
       - ./files:/app/files
     depends_on:
       - database
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=proxy-network"
+
+      # HTTP Router & Redirect zu HTTPS (Greift bei /api)
+      - "traefik.http.routers.im-backend-http.entrypoints=web"
+      - "traefik.http.routers.im-backend-http.rule=Host(`${APP_DOMAIN}`) && PathPrefix(`/api`)"
+      - "traefik.http.routers.im-backend-http.service=im-backend-service"
+      - "traefik.http.routers.im-backend-http.middlewares=im-backend-redirect"
+      - "traefik.http.middlewares.im-backend-redirect.redirectscheme.scheme=https"
+
+      # HTTPS Router (Behoben: Greift JETZT auch auf /api via HTTPS)
+      - "traefik.http.routers.im-backend-secure.entrypoints=websecure"
+      - "traefik.http.routers.im-backend-secure.rule=Host(`${APP_DOMAIN}`) && PathPrefix(`/api`)"
+      - "traefik.http.routers.im-backend-secure.tls=true"
+      - "traefik.http.routers.im-backend-secure.tls.certresolver=myresolver"
+      - "traefik.http.routers.im-backend-secure.service=im-backend-service"
+
+      # Interner Spring Boot Port (Behoben: Muss der INTERNE Port 8080 sein, nicht 3001)
+      - "traefik.http.services.im-backend-service.loadbalancer.server.port=8080" 
     env_file:
       - .env
     healthcheck:
