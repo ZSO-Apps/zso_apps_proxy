@@ -29,7 +29,7 @@ services:
   offlinekarte-tileserver:
     env_file:
       - .env
-    environments:
+    environment:
       - TILESERVER_GL_ALLOWED_HOSTS=${OFFLINEKARTE_TILESERVER_DOMAIN}
     networks:
       - proxy-network
