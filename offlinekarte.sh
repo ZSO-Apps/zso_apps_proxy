@@ -60,11 +60,11 @@ if [ "$CMD" = "init" ]; then
 	echo "----------------------------------------"
 	echo "offlinekarte Konfiguration (inkl. override)"
 	echo "----------------------------------------"
-	docker compose -f $OFFLINEKARTE_PATH/docker-compose.yml -f $(pwd)/docker-compose-offlinekarte.yml config
+	docker compose -f $OFFLINEKARTE_PATH/docker-compose.yml -f $(pwd)/docker-compose-offlinekarte.yml --env-file $(pwd)/.env config
 	echo "----------------------------------------"
 	echo "zskarte Konfiguration (inkl. override)"
 	echo "----------------------------------------"
-	docker compose -f $ZSKARTE_PATH/docker-compose.yml -f $(pwd)/docker-compose-zskarte.yml config
+	docker compose -f $ZSKARTE_PATH/docker-compose.yml -f $(pwd)/docker-compose-zskarte.yml --env-file $(pwd)/.env config
 	echo "----------------------------------------"
 	
     echo "${APPNAME} complete."
