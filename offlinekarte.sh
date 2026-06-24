@@ -77,7 +77,7 @@ elif [ "$CMD" = "start" ]; then
 
     echo "${APPNAME} started."
 
-elif [ "$CMD" = "start" ]; then
+elif [ "$CMD" = "update" ]; then
     echo "Updating ${APPNAME}..."
 
     # to be build
