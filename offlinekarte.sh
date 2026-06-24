@@ -4,6 +4,16 @@ set -e
 CMD=$1
 APPNAME=offlinekarte
 
+if [ -f ".env" ]; then
+    echo "Lade Konfiguration aus .env Datei..."
+    set -a
+    source .env
+    set +a
+else
+    echo "Fehler: Zentrale .env Datei im aktuellen Verzeichnis nicht gefunden!"
+    exit 1
+fi
+
 if [ "$CMD" = "init" ]; then
     echo "Running INIT workflow for ${APPNAME}..."
 	mkdir -p $OFFLINEKARTE_PATH
