@@ -1,21 +1,12 @@
 services:
   frontend:
-    image: node:16-alpine3.15
-    command: ['npm', 'run', 'dev']
-    working_dir: /app
     environment:
       - NODE_ENV=development
       - NEXT_PUBLIC_RFO_BACKEND_URL=${RFO_BACKEND_URL}
       - NEXT_PUBLIC_RFO_STAGE=${RFO_STAGE}
-    ports:
+    ports: !override
       - '3000:3000'
       - '3035:3035'
-    volumes:
-      - ./frontend:/app
-      - frontend.node_modules:/app/node_modules
-    depends_on:
-      backend:
-        condition: service_healthy
     env_file:
       - .env
     networks:
@@ -27,14 +18,14 @@ services:
       
       # HTTP Router & Redirect zu HTTPS
       - "traefik.http.routers.im-frontend-http.entrypoints=web"
-      - "traefik.http.routers.im-frontend-http.rule=Host(`${APP_DOMAIN}`)"
+      - "traefik.http.routers.im-frontend-http.rule=Host(`${INCIDENTMANAGER_FRONTEND_DOMAIN}`)"
       - "traefik.http.routers.im-frontend-http.service=im-frontend-service"
       - "traefik.http.routers.im-frontend-http.middlewares=im-frontend-redirect"
       - "traefik.http.middlewares.im-frontend-redirect.redirectscheme.scheme=https"
       
       # HTTPS Router
       - "traefik.http.routers.im-frontend-secure.entrypoints=websecure"
-      - "traefik.http.routers.im-frontend-secure.rule=Host(`${APP_DOMAIN}`)"
+      - "traefik.http.routers.im-frontend-secure.rule=Host(`${INCIDENTMANAGER_FRONTEND_DOMAIN}`)"
       - "traefik.http.routers.im-frontend-secure.tls=true"
       - "traefik.http.routers.im-frontend-secure.tls.certresolver=myresolver"
       - "traefik.http.routers.im-frontend-secure.service=im-frontend-service"
@@ -48,33 +39,25 @@ services:
     working_dir: /app
     restart: always
     networks:
-      - proxy-network  # BEHOBEN: Traefik muss das Backend im selben Netzwerk erreichen kÃ¶n
+      - proxy-network
       - default
-    environment:
-      - SPRING_JPA_SHOW_SQL=true
-    ports:
+    ports: !override
       - '3001:8080'
       - '5005:5005'
-    volumes:
-      - ./backend:/app
-      - backend.cache:/home/gradle/.gradle
-      - ./files:/app/files
-    depends_on:
-      - database
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=proxy-network"
 
       # HTTP Router & Redirect zu HTTPS (Greift bei /api)
       - "traefik.http.routers.im-backend-http.entrypoints=web"
-      - "traefik.http.routers.im-backend-http.rule=Host(`${APP_DOMAIN}`) && PathPrefix(`/api`)"
+      - "traefik.http.routers.im-backend-http.rule=Host(`${INCIDENTMANAGER_BACKEND_DOMAIN}`) && PathPrefix(`/api`)"
       - "traefik.http.routers.im-backend-http.service=im-backend-service"
       - "traefik.http.routers.im-backend-http.middlewares=im-backend-redirect"
       - "traefik.http.middlewares.im-backend-redirect.redirectscheme.scheme=https"
 
       # HTTPS Router (Behoben: Greift JETZT auch auf /api via HTTPS)
       - "traefik.http.routers.im-backend-secure.entrypoints=websecure"
-      - "traefik.http.routers.im-backend-secure.rule=Host(`${APP_DOMAIN}`) && PathPrefix(`/api`)"
+      - "traefik.http.routers.im-backend-secure.rule=Host(`${INCIDENTMANAGER_BACKEND_DOMAIN}`) && PathPrefix(`/api`)"
       - "traefik.http.routers.im-backend-secure.tls=true"
       - "traefik.http.routers.im-backend-secure.tls.certresolver=myresolver"
       - "traefik.http.routers.im-backend-secure.service=im-backend-service"
@@ -83,18 +66,8 @@ services:
       - "traefik.http.services.im-backend-service.loadbalancer.server.port=8080" 
     env_file:
       - .env
-    healthcheck:
-      test: [ "CMD-SHELL", "wget -q --spider http://localhost:8080/actuator/health || exit 1" ]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 60s
 
   database:
-    image: mysql:8.0
-    command:
-      - '--default-authentication-plugin=mysql_native_password'
-    restart: always
     environment:
       - MYSQL_DATABASE=${RFO_DATABASE_NAME}
       - MYSQL_USER=${RFO_DATABASE_USERNAME}
@@ -102,19 +75,10 @@ services:
       - MYSQL_ROOT_PASSWORD=${RFO_DATABASE_ROOT_PASSWORD}
     ports:
       - '3002:3306'
-    volumes:
-      - database:/var/lib/mysql
-      - ./data-sample.sql:/data-sample.sql
-      - ./data-minimal.sql:/data-minimal.sql
     env_file:
       - .env
     networks:
       - default
-
-volumes:
-  frontend.node_modules:
-  backend.cache:
-  database:
 
 networks:
   proxy-network:
