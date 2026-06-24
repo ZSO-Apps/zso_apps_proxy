@@ -47,8 +47,8 @@ if [ "$CMD" = "init" ]; then
 		fi
 
 		sed -i "s|apiUrl:.*|apiUrl: '${PROTO}://${ZSKARTE_API_DOMAIN}${ZSKARTE_API_PATH}',|" "$ZSKARTE_ENV_TS"
-		sed -i "s|tileUrl:.*|tileUrl: '${PROTO}://${OFFLINEKARTE_TILE_DOMAIN}${OFFLINEKARTE_TILE_PATH}',|" "$ZSKARTE_ENV_TS"
-		sed -i "s|searchUrl:.*|searchUrl: '${PROTO}://${OFFLINEKARTE_SEARCH_DOMAIN}${OFFLINEKARTE_SEARCH_PATH}',|" "$ZSKARTE_ENV_TS"
+		sed -i "s|tileUrl:.*|tileUrl: '${PROTO}://${OFFLINEKARTE_TILESERVER_DOMAIN}${OFFLINEKARTE_TILESERVER_PATH}',|" "$ZSKARTE_ENV_TS"
+		sed -i "s|searchUrl:.*|searchUrl: '${PROTO}://${OFFLINEKARTE_SEARCHSERVER_DOMAIN}${OFFLINEKARTE_SEARCHSERVER_PATH}',|" "$ZSKARTE_ENV_TS"
 		sed -i "s|searchLabel:.*|searchLabel: '${ZSKARTE_SEARCH_LABEL}',|" "$ZSKARTE_ENV_TS"
 		
 		echo "TypeScript Environments erfolgreich aktualisiert."
@@ -61,11 +61,11 @@ if [ "$CMD" = "init" ]; then
 	echo "----------------------------------------"
 	echo "offlinekarte Konfiguration (inkl. override)"
 	echo "----------------------------------------"
-	docker compose -f $OFFLINEKARTE_PATH/docker-compose.yml -f docker-compose-offlinekarte.yml config
+	docker compose -f $OFFLINEKARTE_PATH/docker-compose.yml -f $(pwd)/docker-compose-offlinekarte.yml config
 	echo "----------------------------------------"
 	echo "zskarte Konfiguration (inkl. override)"
 	echo "----------------------------------------"
-	docker compose -f $ZSKARTE_PATH/docker-compose.yml -f docker-compose-zskarte.yml config
+	docker compose -f $ZSKARTE_PATH/docker-compose.yml -f $(pwd)/docker-compose-zskarte.yml config
 	echo "----------------------------------------"
 	
     echo "${APPNAME} complete."
@@ -73,8 +73,8 @@ if [ "$CMD" = "init" ]; then
 elif [ "$CMD" = "start" ]; then
     echo "Starting ${APPNAME}..."
 
-    docker compose up -d -f $OFFLINEKARTE_PATH/docker-compose.yml -f docker-compose-offlinekarte.yml
-	docker compose up -d -f $ZSKARTE_PATH/docker-compose.yml -f docker-compose-zskarte.yml
+    docker compose up -d -f $OFFLINEKARTE_PATH/docker-compose.yml -f $(pwd)/docker-compose-offlinekarte.yml
+	docker compose up -d -f $ZSKARTE_PATH/docker-compose.yml -f $(pwd)/docker-compose-zskarte.yml
 
     echo "${APPNAME} started."
 
