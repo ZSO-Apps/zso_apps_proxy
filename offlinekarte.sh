@@ -10,7 +10,12 @@ if [ -f ".env" ]; then
     source .env
     set +a
 else
-    echo "Fehler: Zentrale .env Datei im aktuellen Verzeichnis nicht gefunden!"
+    echo "Error: Zentrale .env Datei im aktuellen Verzeichnis nicht gefunden!"
+    exit 1
+fi
+
+if ! docker info > /dev/null 2>&1; then
+    echo "Error: Docker läuft aktuell nicht!" >&2
     exit 1
 fi
 
