@@ -74,7 +74,7 @@ elif [ "$CMD" = "start" ]; then
     echo "Starting ${APPNAME}..."
 
     docker compose up -d -f $OFFLINEKARTE_PATH/docker-compose.yml -f $SCRIPTFOLDER/docker-compose-offlinekarte.yml --env-file $SCRIPTFOLDER/.env
-	docker compose up -d -f $ZSKARTE_PATH/docker-compose.yml -f $SCRIPTFOLDER)/docker-compose-zskarte.yml --env-file $SCRIPTFOLDER/.env
+	docker compose up -d -f $ZSKARTE_PATH/docker-compose.yml -f $SCRIPTFOLDER/docker-compose-zskarte.yml --env-file $SCRIPTFOLDER/.env
 
     echo "${APPNAME} started."
 
