@@ -24,7 +24,7 @@ services:
       - "traefik.http.routers.offline-search-secure.tls=true"
       - "traefik.http.routers.offline-search-secure.tls.certresolver=myresolver"
       - "traefik.http.routers.offline-search-secure.service=offline-search-service"
-      - "traefik.http.services.offline-search-service.loadbalancer.server.port=${OFFLINEKARTE_SEARCHSERVER_PORT}"
+      - "traefik.http.services.offline-search-service.loadbalancer.server.port=8000"
 
   offlinekarte-tileserver:
     env_file:
@@ -49,7 +49,7 @@ services:
       - "traefik.http.routers.offline-tiles-secure.tls=true"
       - "traefik.http.routers.offline-tiles-secure.tls.certresolver=myresolver"
       - "traefik.http.routers.offline-tiles-secure.service=offline-tiles-service"
-      - "traefik.http.services.offline-tiles-service.loadbalancer.server.port=${OFFLINEKARTE_TILESERVER_PORT}"
+      - "traefik.http.services.offline-tiles-service.loadbalancer.server.port=8080"
 
 networks:
   proxy-network:

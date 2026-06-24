@@ -35,7 +35,7 @@ services:
       - "traefik.http.routers.zsk-api-secure.tls=true"
       - "traefik.http.routers.zsk-api-secure.tls.certresolver=myresolver"
       - "traefik.http.routers.zsk-api-secure.service=zsk-api-service"
-      - "traefik.http.services.zsk-api-service.loadbalancer.server.port=${ZSKARTE_API_PORT}"
+      - "traefik.http.services.zsk-api-service.loadbalancer.server.port=1337"
 
   app-zskarte:
     ports:
@@ -58,7 +58,7 @@ services:
       - "traefik.http.routers.zsk-app-secure.tls=true"
       - "traefik.http.routers.zsk-app-secure.tls.certresolver=myresolver"
       - "traefik.http.routers.zsk-app-secure.service=zsk-app-service"
-      - "traefik.http.services.zsk-app-service.loadbalancer.server.port=${ZSKARTE_MAIN_PORT}"
+      - "traefik.http.services.zsk-app-service.loadbalancer.server.port=80"
 
 networks:
   proxy-network:
